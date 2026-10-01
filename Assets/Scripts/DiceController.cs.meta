@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 78d0020f30f56594fa29dfa541826524
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - leftClick: {fileID: -5030714410365570689, guid: 0125415ae5945e04d9bd22af7861c4a7, type: 3}
+  - rightClick: {fileID: -824309843059730427, guid: 0125415ae5945e04d9bd22af7861c4a7, type: 3}
+  - mousePos: {fileID: 1671029056690863057, guid: 0125415ae5945e04d9bd22af7861c4a7, type: 3}
+  - respawnPoint: {instanceID: 0}
+  - ground: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

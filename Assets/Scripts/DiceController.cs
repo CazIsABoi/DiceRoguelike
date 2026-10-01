@@ -1,0 +1,226 @@
+using UnityEngine;
+using UnityEngine.InputSystem;
+using System.Collections;
+
+public class DiceController : MonoBehaviour
+{
+    [Header("Input Actions")]
+    [SerializeField] private InputActionReference leftClick;
+    [SerializeField] private InputActionReference rightClick;
+    [SerializeField] private InputActionReference mousePos;
+
+    [Header("Dice Throwing Variables")]
+    [SerializeField] private float liftHeight = 1.5f;
+    [SerializeField] private float followSpeed = 15f;
+    [SerializeField] private float spinStrength = 10f;
+    [SerializeField] private float maxSpeed = 5f;
+    private Vector3 spinDirection;
+
+    private Transform respawnPoint;
+
+    [Header("Game Variables")]
+    [SerializeField] private int ThrowAttempts = 2;
+
+    private Camera cam;
+    private bool isDragging;
+    private Plane dragPlane;
+    private Vector3 grabOffset;
+    private Vector3 targetPosition;
+    private Rigidbody rb;
+    private float groundY;
+    private PlayerController playerCon;
+    private Die die;
+
+    private void Awake()
+    {
+        playerCon = FindAnyObjectByType<PlayerController>();
+        die = GetComponent<Die>();
+        cam = Camera.main;
+        rb = GetComponent<Rigidbody>();
+    }
+
+    public void Setup(Transform ground, Transform RespawnPoint)
+    {
+        respawnPoint = RespawnPoint;
+        groundY = ground.GetComponent<Collider>().bounds.max.y;
+        StartCoroutine(WaitForSpawnSettle());
+    }
+
+    private void OnEnable()
+    {
+        ToggleLeftClick(true);
+        ToggleRightClick(true);
+    }
+
+    private void OnDisable()
+    {
+        ToggleLeftClick(false);
+        ToggleRightClick(false);
+    }
+
+    private void ToggleLeftClick(bool toggle)
+    {
+        if (toggle)
+        {
+            leftClick.action.started += Grab;
+            leftClick.action.canceled += Drop;
+        }
+        else
+        {
+            leftClick.action.started -= Grab;
+            leftClick.action.canceled -= Drop;
+        }
+    }
+
+
+    private void ToggleRightClick(bool toggle)
+    {
+        if (toggle)
+        {
+            rightClick.action.started += MoveDiceToSlot;
+        }
+        else
+        {
+            rightClick.action.started -= MoveDiceToSlot;
+        }
+    }
+    private Ray GetMouseRay()
+    {
+        Vector2 screenPos = mousePos.action.ReadValue<Vector2>();
+        return cam.ScreenPointToRay(screenPos);
+    }
+
+    private void Grab(InputAction.CallbackContext context)
+    {
+        Ray ray = GetMouseRay();
+
+        if (!IsMouseOverMe()) return;
+        rb.isKinematic = false;
+
+        dragPlane = new Plane(Vector3.up, new Vector3(0f, groundY + liftHeight, 0f));
+        rb.useGravity = false;
+        spinDirection = Random.insideUnitSphere;
+
+        if (dragPlane.Raycast(ray, out float distance))
+        {
+            grabOffset = transform.position - ray.GetPoint(distance);
+            isDragging = true;
+            grabOffset.y = 0f;
+        }
+    }
+
+    private void Update()
+    {
+        if (isDragging) Drag();
+
+        if (transform.position.y < -1)
+        {
+            Respawn();
+        }
+    }
+
+    private void Drag()
+    {
+        Ray ray = GetMouseRay();
+
+        if (dragPlane.Raycast(ray, out float distance))
+        {
+            targetPosition = ray.GetPoint(distance) + grabOffset;
+        }
+    }
+
+    private void Drop(InputAction.CallbackContext context)
+    {
+        if (!isDragging) return;
+
+        Vector3 v = rb.linearVelocity;
+        if (v.y > 0f) v.y = 0f;
+        rb.linearVelocity = v;
+
+        isDragging = false;
+        rb.useGravity = true;
+        rb.linearVelocity = Vector3.ClampMagnitude(rb.linearVelocity, maxSpeed);
+
+        ThrowAttempts--;
+        CheckThrowAttempts();
+    }
+
+    private void FixedUpdate()
+    {
+        if (!isDragging) return;
+
+        Vector3 toTarget = targetPosition - rb.position;
+
+        rb.linearVelocity = toTarget * followSpeed;
+        rb.angularVelocity = spinDirection * spinStrength;
+    }
+
+    private void Respawn()
+    {
+        transform.position = respawnPoint.position;
+        rb.linearVelocity = Vector3.zero;
+    }
+
+    public float GetThrowAttempts() { return ThrowAttempts; }
+
+    public void SetThrowAttempts(int throwAttempts) { ThrowAttempts = throwAttempts; CheckThrowAttempts(); }
+
+    private void CheckThrowAttempts()
+    {
+        StartCoroutine(WaitForSettle());
+    }
+
+    private void MoveDiceToSlot(InputAction.CallbackContext context)
+    {
+        if (!IsMouseOverMe()) return;
+        ThrowAttempts = 0;
+        CheckThrowAttempts();
+    }
+
+    private bool IsMouseOverMe()
+    {
+        Ray ray = GetMouseRay();
+
+        return Physics.Raycast(ray, out RaycastHit hit) && hit.transform == transform;
+    }
+
+    private IEnumerator WaitForSettle()
+    {
+        ToggleLeftClick(false);
+        ToggleRightClick(false);
+        yield return new WaitForSeconds(0.3f); // give it time to actually start falling
+
+        while (rb.linearVelocity.sqrMagnitude > 0.01f || rb.angularVelocity.sqrMagnitude > 0.01f)
+        {
+            yield return null;
+        }
+
+        yield return new WaitForSeconds(0.3f); // Make sure it's flat
+
+        die.LogTopFace();
+        if (ThrowAttempts <= 0)
+        {
+            playerCon.MoveDiceToSlot(die);
+        }
+        else
+        {
+            ToggleLeftClick(true);
+            ToggleRightClick(true);
+            rb.isKinematic = true;
+        }
+    }
+
+    private IEnumerator WaitForSpawnSettle()
+    {
+        yield return new WaitForSeconds(0.3f); // give it time to actually start falling
+
+        while (rb.linearVelocity.sqrMagnitude > 0.01f || rb.angularVelocity.sqrMagnitude > 0.01f)
+        {
+            yield return null;
+        }
+
+        yield return new WaitForSeconds(0.3f); // Make sure it's flat
+
+        rb.isKinematic = true;
+    }
+}
