@@ -353,7 +353,7 @@ MonoBehaviour:
   liftHeight: 3
   followSpeed: 15
   spinStrength: 15
-  maxSpeed: 20
+  maxSpeed: 30
   ThrowAttempts: 2
 --- !u!114 &4062360055529501214
 MonoBehaviour:

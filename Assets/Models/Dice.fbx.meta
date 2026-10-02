@@ -13,7 +13,7 @@ ModelImporter:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Pip
-    second: {fileID: -3395288169948292965, guid: f8ebcba115342b5459b0361742ba347c, type: 3}
+    second: {fileID: 2100000, guid: ad486d1308cf7354894463b114f6684a, type: 2}
   materials:
     materialImportMode: 1
     materialName: 0
