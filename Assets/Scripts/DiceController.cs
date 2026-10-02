@@ -1,6 +1,6 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using System.Collections;
 
 public class DiceController : MonoBehaviour
 {
@@ -15,7 +15,7 @@ public class DiceController : MonoBehaviour
     [SerializeField] private float spinStrength = 10f;
     [SerializeField] private float maxSpeed = 5f;
     private Vector3 spinDirection;
-
+    private Coroutine rotationRoutine;
     private Transform respawnPoint;
 
     [Header("Game Variables")]
@@ -101,13 +101,14 @@ public class DiceController : MonoBehaviour
 
         dragPlane = new Plane(Vector3.up, new Vector3(0f, groundY + liftHeight, 0f));
         rb.useGravity = false;
-        spinDirection = Random.insideUnitSphere;
-
+        spinDirection = Random.onUnitSphere;
+        
         if (dragPlane.Raycast(ray, out float distance))
         {
             grabOffset = transform.position - ray.GetPoint(distance);
             isDragging = true;
             grabOffset.y = 0f;
+            PlayDiceRotation(1f);
         }
     }
 
@@ -226,6 +227,30 @@ public class DiceController : MonoBehaviour
         rb.isKinematic = true;
         ToggleLeftClick(true);
         ToggleRightClick(true);
+    }
+
+    private void PlayDiceRotation(float timeBetween)
+    {
+        if (rotationRoutine != null) StopCoroutine(rotationRoutine);
+        rotationRoutine = StartCoroutine(ChangeDiceRotation(timeBetween));
+    }
+
+    private IEnumerator ChangeDiceRotation(float timeBetween)
+    {
+        while (isDragging)
+        {
+            Vector3 from = spinDirection;
+            Vector3 to = Random.onUnitSphere;
+            float elapsed = 0f;
+            while (elapsed < timeBetween && isDragging)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / timeBetween;
+                t = Mathf.SmoothStep(0f, 1f, t);
+                spinDirection = Vector3.Slerp(from, to, t);
+                yield return null;
+            }
+        }
     }
 
     public void ResetForNewRound()
