@@ -25,5 +25,10 @@ public class DiceSlot : MonoBehaviour
     {
         CurrentDie = null;
     }
+
+    public void Setup(FaceType type)
+    {
+        acceptableFace = type;
+    }
 }
 

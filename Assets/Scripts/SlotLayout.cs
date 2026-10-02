@@ -1,7 +1,7 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "SlotLayout", menuName = "Scriptable Objects/SlotLayout")]
+[CreateAssetMenu(fileName = "SlotLayout", menuName = "Dice/SlotLayout")]
 public class SlotLayout : ScriptableObject
 {
-    FaceType[] pattern;
+    public FaceType[] pattern;
 }

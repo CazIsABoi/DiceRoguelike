@@ -1,0 +1,183 @@
+using System.Collections;
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+
+public class GameController : MonoBehaviour
+{
+    [Header("References")]
+    [SerializeField] private PlayerController player;
+
+    [Header("Score UI")]
+    [SerializeField] private TMP_Text scoreText;
+    [SerializeField] private Gradient scoreGradient;
+    [SerializeField] private float maxLog = 3f;
+    [SerializeField] private float maxShake = 15f;
+
+    [Header("Round Flow")]
+    [SerializeField] private float timeBetweenRounds = 2f;
+
+    private int score;
+    private bool roundEnding;
+    private Coroutine scorePunchRoutine;
+    private Coroutine scoreFadeRoutine;
+
+    public int Score => score;
+
+    private void Start()
+    {
+        scoreText.text = "0";
+    }
+
+    // ---------- Round flow ----------
+
+    // Called by PlayerController when every slot is filled and the last die has landed
+    public void OnEquationComplete(int result)
+    {
+        if (roundEnding) return;
+        StartCoroutine(EndRoundRoutine(result));
+    }
+
+    private IEnumerator EndRoundRoutine(int result)
+    {
+        roundEnding = true;
+
+        score = result;
+        scoreText.text = result.ToString();
+        PlayResultFeedback(result);
+
+        yield return new WaitForSeconds(timeBetweenRounds);
+
+        player.ResetRound();
+        roundEnding = false;
+    }
+
+    // ---------- Maths (static: anyone can use these, player or enemy) ----------
+
+    public static int Evaluate(List<FaceDefinition> faces)
+    {
+        int total = 0;
+        int currentNumber = 0;
+        Operator pendingOp = Operator.Add;
+
+        foreach (FaceDefinition face in faces)
+        {
+            if (face.type == FaceType.Number)
+            {
+                currentNumber = (currentNumber * 10) + face.number;
+            }
+            else
+            {
+                total = Apply(pendingOp, total, currentNumber);
+                pendingOp = face.op;
+                currentNumber = 0;
+            }
+        }
+
+        total = Apply(pendingOp, total, currentNumber);
+        return total;
+    }
+
+    public static int Apply(Operator op, int a, int b)
+    {
+        switch (op)
+        {
+            case Operator.Add:
+                return a + b;
+            case Operator.Subtract:
+                return a - b;
+            case Operator.Multiply:
+                return a * b;
+            case Operator.Divide:
+                if (b == 0)
+                {
+                    Debug.Log("Divide by Zero");
+                    return 0;
+                }
+                return Mathf.CeilToInt((float)a / b);
+        }
+        return 0;
+    }
+
+    public static string OpSymbol(Operator op)
+    {
+        switch (op)
+        {
+            case Operator.Add: return "+";
+            case Operator.Subtract: return "-";
+            case Operator.Multiply: return "×";
+            case Operator.Divide: return "÷";
+        }
+        return "?";
+    }
+
+    // ---------- Score feedback ----------
+
+    private void PlayResultFeedback(int result)
+    {
+        Color flashColor;
+        float punchSize;
+        float shake;
+
+        if (result <= 0)
+        {
+            flashColor = Color.gray;
+            punchSize = 0.8f;
+            shake = 0f;
+        }
+        else
+        {
+            float intensity = Mathf.InverseLerp(0f, maxLog, Mathf.Log10(result + 1));
+            flashColor = scoreGradient.Evaluate(intensity);
+            shake = intensity > 0.5f ? intensity * maxShake : 0f;
+            punchSize = Mathf.Lerp(1.1f, 1.6f, intensity);
+        }
+
+        scoreText.color = flashColor;
+
+        if (scorePunchRoutine != null) StopCoroutine(scorePunchRoutine);
+        scorePunchRoutine = StartCoroutine(Punch(scoreText.transform, punchSize, 0.25f, shake));
+
+        if (scoreFadeRoutine != null) StopCoroutine(scoreFadeRoutine);
+        scoreFadeRoutine = StartCoroutine(FadeColor(scoreText, flashColor, Color.white, 1f, 0.25f));
+    }
+
+    // ---------- Reusable juice (static: any MonoBehaviour can StartCoroutine these) ----------
+
+    public static IEnumerator Punch(Transform target, float punchScale, float duration, float shake)
+    {
+        Vector3 big = Vector3.one * punchScale;
+        Vector3 startingPosition = target.localPosition;
+        float elapsed = 0f;
+
+        target.localScale = big;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+            target.localPosition = startingPosition + (Vector3)Random.insideUnitCircle * shake * (1 - t);
+            target.localScale = Vector3.Lerp(big, Vector3.one, t);
+            yield return null;
+        }
+
+        target.localScale = Vector3.one;
+        target.localPosition = startingPosition;
+    }
+
+    public static IEnumerator FadeColor(TMP_Text text, Color from, Color to, float delay, float duration)
+    {
+        yield return new WaitForSeconds(delay);
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+            text.color = Color.Lerp(from, to, t);
+            yield return null;
+        }
+
+        text.color = to;
+    }
+}
