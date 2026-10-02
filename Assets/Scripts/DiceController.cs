@@ -20,6 +20,7 @@ public class DiceController : MonoBehaviour
 
     [Header("Game Variables")]
     [SerializeField] private int ThrowAttempts = 2;
+    private int StartingThrowAttempts;
 
     private Camera cam;
     private bool isDragging;
@@ -37,6 +38,8 @@ public class DiceController : MonoBehaviour
         die = GetComponent<Die>();
         cam = Camera.main;
         rb = GetComponent<Rigidbody>();
+
+        StartingThrowAttempts = ThrowAttempts;
     }
 
     public void Setup(Transform ground, Transform RespawnPoint)
@@ -48,8 +51,7 @@ public class DiceController : MonoBehaviour
 
     private void OnEnable()
     {
-        ToggleLeftClick(true);
-        ToggleRightClick(true);
+
     }
 
     private void OnDisable()
@@ -222,5 +224,16 @@ public class DiceController : MonoBehaviour
         yield return new WaitForSeconds(0.3f); // Make sure it's flat
 
         rb.isKinematic = true;
+        ToggleLeftClick(true);
+        ToggleRightClick(true);
+    }
+
+    public void ResetForNewRound()
+    {
+        transform.position = respawnPoint.position;
+        rb.isKinematic = false;
+        StartCoroutine(WaitForSpawnSettle());
+        ThrowAttempts = StartingThrowAttempts;
+        transform.rotation = Random.rotation;
     }
 }

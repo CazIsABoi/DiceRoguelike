@@ -1,5 +1,4 @@
 using UnityEngine;
-using static UnityEditor.IMGUI.Controls.PrimitiveBoundsHandle;
 
 public class Die : MonoBehaviour
 {
@@ -8,12 +7,7 @@ public class Die : MonoBehaviour
     [SerializeField] private FaceDefinition blankFace; // For empty sockets
     private FaceDefinition[] currentFaces;
     private FaceView[] spawnedFaces;
-    private DiceController diceController;
 
-    private void Start()
-    {
-        
-    }
 
     public void Initialize(DieDefinition definition)
     {
