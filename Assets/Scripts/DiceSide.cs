@@ -122,8 +122,9 @@ public abstract class DiceSide : MonoBehaviour
         Quaternion startRot = dice.rotation;
         float elapsed = 0f;
 
-        Vector3 localUp = ClosestLocalAxis(dice, Vector3.up);
-        Vector3 localForward = ClosestLocalAxis(dice, slot.forward);
+        Transform top = dice.GetComponent<Die>().GetTopSocket();
+        Vector3 localUp = dice.InverseTransformDirection(top.up);
+        Vector3 localForward = dice.InverseTransformDirection(top.forward);
         Quaternion targetRot = slot.rotation * Quaternion.Inverse(Quaternion.LookRotation(localForward, localUp));
         Vector3 targetPos = slot.position + slot.up * dieHeight;
 

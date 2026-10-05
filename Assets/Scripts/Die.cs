@@ -55,6 +55,25 @@ public class Die : MonoBehaviour
         return currentFaces[bestIndex];
     }
 
+    public Transform GetTopSocket()
+    {
+        Vector3 worldDir = Vector3.up;
+        int bestIndex = 0;
+        float bestDot = -Mathf.Infinity;
+
+        for (int i = 0; i < sockets.Length; i++)
+        {
+            Vector3 worldAxis = sockets[i].up;
+            float dot = Vector3.Dot(worldAxis, worldDir);
+            if (dot > bestDot)
+            {
+                bestDot = dot;
+                bestIndex = i;
+            }
+        }
+        return sockets[bestIndex].transform;
+    }
+
     public bool IsFlat(float threshold)
     {
         Vector3 worldDir = Vector3.up;

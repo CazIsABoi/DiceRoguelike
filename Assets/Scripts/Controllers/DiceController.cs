@@ -17,6 +17,7 @@ public class DiceController : MonoBehaviour
     private Vector3 spinDirection;
     private Coroutine rotationRoutine;
     private Transform respawnPoint;
+    private Coroutine respawning;
 
     [Header("Game Variables")]
     [SerializeField] private int ThrowAttempts = 2;
@@ -166,10 +167,31 @@ public class DiceController : MonoBehaviour
         rb.angularVelocity = spinDirection * spinStrength;
     }
 
-    private void Respawn()
+    public void Respawn()
     {
-        transform.position = respawnPoint.position;
-        rb.linearVelocity = Vector3.zero;
+        if (respawning != null) StopCoroutine(respawning);
+        respawning = StartCoroutine(RespawnDice(0.5f));
+    }
+
+    private IEnumerator RespawnDice(float moveTime)
+    {
+        yield return new WaitForSeconds(moveTime);
+
+        if (rb.isKinematic != true) rb.linearVelocity = Vector3.zero;
+        Vector3 startPos = transform.position;
+        Quaternion startRot = transform.rotation;
+        float elapsed = 0f;
+
+        Vector3 targetPos = respawnPoint.position;
+
+        while (elapsed < moveTime)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / moveTime;
+            t = Mathf.SmoothStep(0f, 1f, t);
+            transform.position = Vector3.Lerp(startPos, targetPos, t);
+            yield return null;
+        }
     }
 
     public int GetThrowAttempts() { return ThrowAttempts; }

@@ -31,6 +31,8 @@ public class GameController : MonoBehaviour
 
     private void Start()
     {
+        QualitySettings.vSyncCount = 0;
+        Application.targetFrameRate = 144;
         scoreText.text = "0";
     }
 
