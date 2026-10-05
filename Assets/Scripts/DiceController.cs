@@ -20,6 +20,7 @@ public class DiceController : MonoBehaviour
 
     [Header("Game Variables")]
     [SerializeField] private int ThrowAttempts = 2;
+    [SerializeField] private float killHeight = -0.5f;
     private int StartingThrowAttempts;
 
     private Camera cam;
@@ -116,7 +117,7 @@ public class DiceController : MonoBehaviour
     {
         if (isDragging) Drag();
 
-        if (transform.position.y < -1)
+        if (transform.position.y < killHeight)
         {
             Respawn();
         }

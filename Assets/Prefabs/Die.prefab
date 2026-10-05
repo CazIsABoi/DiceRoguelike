@@ -355,6 +355,7 @@ MonoBehaviour:
   spinStrength: 15
   maxSpeed: 30
   ThrowAttempts: 2
+  killHeight: -1
 --- !u!114 &4062360055529501214
 MonoBehaviour:
   m_ObjectHideFlags: 0
