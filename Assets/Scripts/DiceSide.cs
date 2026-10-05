@@ -82,25 +82,28 @@ public abstract class DiceSide : MonoBehaviour
         }
     }
 
-    public void MoveDiceToSlot(Die dice)
+    public virtual void MoveDiceToSlot(Die die)
     {
-        Rigidbody rb = dice.GetComponent<Rigidbody>();
+        DiceSlot slot = ChooseSlot(die);
+        if (slot == null) return;      // no free slot, stays physical
+        PlaceInSlot(die, slot);
+    }
+    protected virtual DiceSlot ChooseSlot(Die die)
+    {
+        foreach (DiceSlot slot in diceSlots)
+        {
+            if (!slot.CanAccept(die)) continue;
+            return slot;
+        }
+        return null; // no slots
+    }
+
+    protected void PlaceInSlot(Die die, DiceSlot slot)
+    {
+        Rigidbody rb = die.GetComponent<Rigidbody>();
         rb.isKinematic = true;
-        bool placed = false;
-
-        for (int i = 0; i < diceSlots.Count; i++)
-        {
-            if (!diceSlots[i].CanAccept(dice)) continue;
-            StartCoroutine(MoveRoutine(dice.transform, diceSlots[i].transform));
-            diceSlots[i].Place(dice);
-            placed = true;
-            break;
-        }
-
-        if (!placed)
-        {
-            rb.isKinematic = false; // No free slot, let it stay physical
-        }
+        slot.Place(die);
+        StartCoroutine(MoveRoutine(die.transform, slot.transform));
     }
 
     private IEnumerator MoveRoutine(Transform dice, Transform slot)

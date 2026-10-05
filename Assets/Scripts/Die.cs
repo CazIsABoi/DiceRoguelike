@@ -8,7 +8,6 @@ public class Die : MonoBehaviour
     private FaceDefinition[] currentFaces;
     private FaceView[] spawnedFaces;
 
-
     public void Initialize(DieDefinition definition)
     {
         currentFaces = new FaceDefinition[sockets.Length];
@@ -63,4 +62,6 @@ public class Die : MonoBehaviour
         print(topFace.number);
         print(topFace.op);
     }
+
+    public FaceDefinition[] GetCurrentFaces() { return currentFaces; }
 }

@@ -172,9 +172,9 @@ public class DiceController : MonoBehaviour
         rb.linearVelocity = Vector3.zero;
     }
 
-    public float GetThrowAttempts() { return ThrowAttempts; }
+    public int GetThrowAttempts() { return ThrowAttempts; }
 
-    public void SetThrowAttempts(int throwAttempts) { ThrowAttempts = throwAttempts; CheckThrowAttempts(); }
+    public void SetThrowAttempts(int throwAttempts) { ThrowAttempts = throwAttempts; }
 
     private void CheckThrowAttempts()
     {
@@ -209,10 +209,7 @@ public class DiceController : MonoBehaviour
         yield return new WaitForSeconds(0.3f); // Make sure it's flat
 
         die.LogTopFace();
-        if (ThrowAttempts <= 0)
-        {
-            owner.MoveDiceToSlot(die);
-        }
+        if (ThrowAttempts <= 0 || !playerControlled) owner.MoveDiceToSlot(die);
         else
         {
             ToggleLeftClick(true);
@@ -263,14 +260,15 @@ public class DiceController : MonoBehaviour
 
     public void Throw(Vector3 force, Vector3 torque)
     {
-        StopCoroutine(WaitForSpawnSettle());
+        StopCoroutine(spawnSettle);
         rb.isKinematic = false;
         rb.useGravity = true;
 
         rb.AddForce(force, ForceMode.Impulse);
         rb.AddTorque(torque, ForceMode.Impulse);
 
-        ThrowAttempts = 0;
+        ThrowAttempts--;
+
         StartCoroutine(WaitForSettle());
     }
 
