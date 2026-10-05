@@ -8,6 +8,13 @@ public abstract class DiceSide : MonoBehaviour
     protected abstract bool IsPlayerControlled { get; }
     [Header("References")]
     [SerializeField] private GameController gameController;
+    [SerializeField] private AudioSource audio;
+
+    [Header("Health")]
+    [SerializeField] protected int maxHealth = 100;
+    public int Health { get; private set; }
+    public bool IsDead => Health <= 0;
+    public event System.Action<int, int> OnHealthChanged; // (current, max)
 
     [Header("Slots")]
     protected List<DiceSlot> diceSlots = new List<DiceSlot>();
@@ -27,6 +34,9 @@ public abstract class DiceSide : MonoBehaviour
     [Header("UI")]
     [SerializeField] protected TMP_Text equationText;
     private Coroutine equationPunchRoutine;
+
+    [Header("UI")]
+    [SerializeField] private AudioClip equationSFX;
 
     // ---------- Dice ----------
 
@@ -188,7 +198,7 @@ public abstract class DiceSide : MonoBehaviour
             if (diceSlots[i].IsEmpty)
             {
                 if (diceSlots[i].AcceptableFace == FaceType.Number) text += "_";
-                else text += " ? ";
+                else text += "?";
                 continue;
             }
 
@@ -199,9 +209,12 @@ public abstract class DiceSide : MonoBehaviour
             }
             else
             {
-                text += " " + GameController.OpSymbol(face.op) + " ";
+                text += GameController.OpSymbol(face.op);
             }
         }
+        audio.pitch = Random.Range(.5f, 1.5f);
+        audio.PlayOneShot(equationSFX);
+        audio.pitch = 1f;
         return text;
     }
 
@@ -210,4 +223,21 @@ public abstract class DiceSide : MonoBehaviour
         if (equationPunchRoutine != null) StopCoroutine(equationPunchRoutine);
         equationPunchRoutine = StartCoroutine(GameController.Punch(equationText.transform, scale, duration, 0f));
     }
+
+    #region Health
+    protected void InitHealth(int max)
+    {
+        maxHealth = max;
+        Health = max;
+        OnHealthChanged?.Invoke(Health, maxHealth);
+    }
+
+    public void TakeDamage(int amount)
+    {
+        Health -= amount;
+        if (Health <= 0) Health = 0;
+        OnHealthChanged?.Invoke(Health, maxHealth);
+    }
+
+    #endregion
 }

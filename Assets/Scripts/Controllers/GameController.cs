@@ -8,6 +8,7 @@ public class GameController : MonoBehaviour
     [Header("References")]
     [SerializeField] private PlayerController player;
     [SerializeField] private EnemyController enemy;
+    [SerializeField] private AudioSource audio;
 
     private int? playerResult;
     private int? enemyResult;
@@ -52,6 +53,15 @@ public class GameController : MonoBehaviour
         roundEnding = true;
 
         int diff = playerResult.Value - enemyResult.Value;
+
+        if (diff < 0)
+        {
+            player.TakeDamage(diff * -1);
+        }
+        else
+        {
+            enemy.TakeDamage(diff);
+        }
 
         score = diff;
         scoreText.text = diff.ToString();

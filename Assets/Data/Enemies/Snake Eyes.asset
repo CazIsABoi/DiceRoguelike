@@ -15,8 +15,8 @@ MonoBehaviour:
   displayName: Snake Eyes
   maxHP: 20
   dice:
-  - {fileID: 11400000, guid: 63b782c351538d4498de2a611ca7b20c, type: 2}
-  - {fileID: 11400000, guid: 63b782c351538d4498de2a611ca7b20c, type: 2}
+  - {fileID: 11400000, guid: 9cef0ca6dfa06ad48afd9948b67bb91d, type: 2}
+  - {fileID: 11400000, guid: 9cef0ca6dfa06ad48afd9948b67bb91d, type: 2}
   - {fileID: 11400000, guid: 6e5b375f04c4b8742907466c1b6ec98c, type: 2}
   layout: {fileID: 11400000, guid: 7c23da8478adfaa42a56f331a5c41966, type: 2}
   brain: 1

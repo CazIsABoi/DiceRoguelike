@@ -55,6 +55,23 @@ public class Die : MonoBehaviour
         return currentFaces[bestIndex];
     }
 
+    public bool IsFlat(float threshold)
+    {
+        Vector3 worldDir = Vector3.up;
+        float bestDot = -Mathf.Infinity;
+
+        for (int i = 0; i < sockets.Length; i++)
+        {
+            Vector3 worldAxis = sockets[i].up;
+            float dot = Vector3.Dot(worldAxis, worldDir);
+            if (dot > bestDot)
+            {
+                bestDot = dot;
+            }
+        }
+        return bestDot >= threshold;
+    }
+
     public void LogTopFace()
     {
         FaceDefinition topFace = GetTopFace();

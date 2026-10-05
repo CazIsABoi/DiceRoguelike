@@ -22,6 +22,7 @@ public class EnemyController : DiceSide
     // Start: spawn enemy.dice, spawn slots from enemy.layout.pattern
     private void Start()
     {
+        InitHealth(enemy.maxHP);
         SpawnDice(enemy.dice);
         SpawnSlots(new List<FaceType>(enemy.layout.pattern));
         equationText.text = BuildEquation();

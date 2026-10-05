@@ -8,6 +8,7 @@ public class PlayerController : DiceSide
 
     private void Start()
     {
+        InitHealth(maxHealth);
         SpawnDice(die);
         RebuildSlots();
         equationText.text = BuildEquation();

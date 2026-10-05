@@ -201,13 +201,27 @@ public class DiceController : MonoBehaviour
         ToggleRightClick(false);
         yield return new WaitForSeconds(0.3f); // give it time to actually start falling
 
-        while (rb.linearVelocity.sqrMagnitude > 0.01f || rb.angularVelocity.sqrMagnitude > 0.01f)
+        int nudges = 0;
+        while (true)
         {
-            yield return null;
+            while (rb.linearVelocity.sqrMagnitude > 0.01f || rb.angularVelocity.sqrMagnitude > 0.01f)
+            {
+                yield return null;
+            }
+
+            if (die.IsFlat(0.95f)) break;
+
+            rb.AddForce(Vector3.up * 3f, ForceMode.Impulse);
+            rb.AddTorque(Random.onUnitSphere * 2f, ForceMode.Impulse);
+            nudges++;
+
+            if (nudges == 5)
+            {
+                Respawn();
+                nudges = 0;
+            }
+            yield return new WaitForSeconds(0.3f); // Make sure it's flat
         }
-
-        yield return new WaitForSeconds(0.3f); // Make sure it's flat
-
         die.LogTopFace();
         if (ThrowAttempts <= 0 || !playerControlled) owner.MoveDiceToSlot(die);
         else
@@ -217,17 +231,31 @@ public class DiceController : MonoBehaviour
             rb.isKinematic = true;
         }
     }
-
     private IEnumerator WaitForSpawnSettle()
     {
         yield return new WaitForSeconds(0.3f); // give it time to actually start falling
 
-        while (rb.linearVelocity.sqrMagnitude > 0.01f || rb.angularVelocity.sqrMagnitude > 0.01f)
+        int nudges = 0;
+        while (true)
         {
-            yield return null;
-        }
+            while (rb.linearVelocity.sqrMagnitude > 0.01f || rb.angularVelocity.sqrMagnitude > 0.01f)
+            {
+                yield return null;
+            }
 
-        yield return new WaitForSeconds(0.3f); // Make sure it's flat
+            if (die.IsFlat(0.95f)) break;
+
+            rb.AddForce(Vector3.up * 3f, ForceMode.Impulse);
+            rb.AddTorque(Random.onUnitSphere * 2f, ForceMode.Impulse);
+            nudges++;
+
+            if (nudges == 5)
+            {
+                Respawn();
+                nudges = 0;
+            }
+            yield return new WaitForSeconds(0.3f); // Make sure it's flat
+        }
 
         rb.isKinematic = true;
         ToggleLeftClick(true);
