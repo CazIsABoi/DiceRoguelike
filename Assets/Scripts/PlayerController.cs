@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using TMPro;
 using UnityEngine;
 
@@ -10,7 +11,7 @@ public class PlayerController : MonoBehaviour
 
     [Header("Slots")]
     [SerializeField] private List<SlotLayout> slotLayouts;
-    private List<DiceSlot> diceSlots;
+    private List<DiceSlot> diceSlots = new List<DiceSlot>();
     [SerializeField] private float moveTime = 0.25f;
     private int diceInSlots = 0;
     [SerializeField] private DiceSlot slotPrefab;
@@ -34,7 +35,7 @@ public class PlayerController : MonoBehaviour
         spawnedDice = new Die[die.Length];
 
         SpawnDice();
-        SpawnSlots(0);
+        RebuildSlots();
         equationText.text = BuildEquation();
     }
 
@@ -80,14 +81,44 @@ public class PlayerController : MonoBehaviour
 
         for (int g = 0; g < groups; g++)
         {
-            // TODO: this group's size is baseSize, plus 1 if it gets one of the extras
-            // TODO: add that many FaceType.Number
-            // TODO: if this isn't the last group, add FaceType.Operator
+            int size = baseSize;
+            if (g < extra) size++;
+            for (int i = 0; i < size; i++)
+            {
+                pattern.Add(FaceType.Number);
+            }
+            if (g < groups - 1) pattern.Add(FaceType.Operator);
         }
         return pattern;
     }
 
-    public void SpawnSlots(int index)
+    private void RebuildSlots()
+    {
+        int operators = 0;
+        int numbers = 0;
+        for (int i = 0; i < die.Length; i++)
+        {
+            int opSides = 0;
+            int numSides = 0;
+            for (int j = 0; j < die[i].faceDefinitions.Length; j++)
+            {
+                if (die[i].faceDefinitions[j] == null)
+                {
+                    numSides++;
+                    continue;
+                }
+                if (die[i].faceDefinitions[j].type == FaceType.Number) numSides++;
+                if (die[i].faceDefinitions[j].type == FaceType.Operator) opSides++;
+            }
+
+            if (opSides > numSides) operators++;
+            else numbers++;
+        }
+        operators = Mathf.Min(operators, numbers - 1);
+        SpawnSlots(GenerateLayout(numbers, operators));
+    }
+
+    public void SpawnSlots(List<FaceType> pattern)
     {
         if (diceSlots != null)
         {
@@ -98,15 +129,12 @@ public class PlayerController : MonoBehaviour
             diceSlots.Clear();
         }
 
-        SlotLayout currentLayout = slotLayouts[index];
-        int count = currentLayout.pattern.Length;
-
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < pattern.Count; i++)
         {
-            float x = (i - (count - 1) / 2f) * spacing;
+            float x = (i - (pattern.Count - 1) / 2f) * spacing;
             DiceSlot newSlot = Instantiate(slotPrefab, anchor);
             newSlot.transform.localPosition = new Vector3(x, 0f, 0f);
-            newSlot.Setup(currentLayout.pattern[i]);
+            newSlot.Setup(pattern[i]);
             diceSlots.Add(newSlot);
         }
     }
@@ -141,7 +169,7 @@ public class PlayerController : MonoBehaviour
         Vector3 localUp = ClosestLocalAxis(dice, Vector3.up);
         Vector3 localForward = ClosestLocalAxis(dice, slot.forward);
         Quaternion targetRot = slot.rotation * Quaternion.Inverse(Quaternion.LookRotation(localForward, localUp));
-        Vector3 targetPos = slot.position + slot.up * .5f;
+        Vector3 targetPos = slot.position + slot.up * dieHeight;
 
         while (elapsed < moveTime)
         {
