@@ -3,7 +3,8 @@ using UnityEngine;
 public class DiceSlot : MonoBehaviour
 {
     [SerializeField] private FaceType acceptableFace;
-    public MeshRenderer renderer;
+    [SerializeField] private Transform outline;
+    private MeshRenderer renderer;
     private Color startingColor;
 
     public FaceType AcceptableFace => acceptableFace;
@@ -13,7 +14,7 @@ public class DiceSlot : MonoBehaviour
 
     private void Awake()
     {
-        renderer = GetComponent<MeshRenderer>();
+        renderer = GetComponentInChildren<MeshRenderer>();
         startingColor = renderer.material.color;
     }
 
@@ -39,6 +40,10 @@ public class DiceSlot : MonoBehaviour
     public void Setup(FaceType type)
     {
         acceptableFace = type;
+        if (type == FaceType.Operator)
+        {
+            outline.Rotate(transform.up, 45f, Space.World);
+        }
     }
 }
 

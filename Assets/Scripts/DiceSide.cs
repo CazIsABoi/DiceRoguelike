@@ -1,17 +1,16 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using TMPro;
 using UnityEngine;
 
-public class PlayerController : MonoBehaviour
+public abstract class DiceSide : MonoBehaviour
 {
+    protected abstract bool IsPlayerControlled { get; }
     [Header("References")]
     [SerializeField] private GameController gameController;
 
     [Header("Slots")]
-    [SerializeField] private List<SlotLayout> slotLayouts;
-    private List<DiceSlot> diceSlots = new List<DiceSlot>();
+    protected List<DiceSlot> diceSlots = new List<DiceSlot>();
     [SerializeField] private float moveTime = 0.25f;
     private int diceInSlots = 0;
     [SerializeField] private DiceSlot slotPrefab;
@@ -20,37 +19,28 @@ public class PlayerController : MonoBehaviour
 
     [Header("Dice")]
     [SerializeField] private Die diePrefab; // Prefab
-    [SerializeField] private DieDefinition[] die;
-    private Die[] spawnedDice;
+    protected Die[] spawnedDice;
     [SerializeField] private float dieHeight = 0.5f;
     [SerializeField] private Transform spawnPoint; // Where dice spawn
     [SerializeField] private Transform ground;
 
     [Header("UI")]
-    [SerializeField] private TMP_Text equationText;
+    [SerializeField] protected TMP_Text equationText;
     private Coroutine equationPunchRoutine;
-
-    private void Start()
-    {
-        spawnedDice = new Die[die.Length];
-
-        SpawnDice();
-        RebuildSlots();
-        equationText.text = BuildEquation();
-    }
 
     // ---------- Dice ----------
 
-    public void SpawnDice()
+    protected void SpawnDice(DieDefinition[] dice)
     {
-        for (int i = 0; i < die.Length; i++)
+        spawnedDice = new Die[dice.Length];
+        for (int i = 0; i < dice.Length; i++)
         {
             Die newDie = Instantiate(diePrefab, spawnPoint.position, Random.rotation);
             spawnedDice[i] = newDie;
-            spawnedDice[i].Initialize(die[i]);
+            spawnedDice[i].Initialize(dice[i]);
 
             DiceController controller = newDie.GetComponent<DiceController>();
-            controller.Setup(ground, spawnPoint);
+            controller.Setup(this, ground, spawnPoint, IsPlayerControlled);
         }
     }
 
@@ -72,62 +62,15 @@ public class PlayerController : MonoBehaviour
     }
 
     // ---------- Slots ----------
-    private List<FaceType> GenerateLayout(int numbers, int operators)
+
+
+    protected void SpawnSlots(List<FaceType> pattern)
     {
-        List<FaceType> pattern = new List<FaceType>();
-        int groups = operators + 1;
-        int baseSize = numbers / groups;   // integer division on purpose this time!
-        int extra = numbers % groups;      // leftovers that don't divide evenly
-
-        for (int g = 0; g < groups; g++)
+        for (int i = 0; i < diceSlots.Count; i++)
         {
-            int size = baseSize;
-            if (g < extra) size++;
-            for (int i = 0; i < size; i++)
-            {
-                pattern.Add(FaceType.Number);
-            }
-            if (g < groups - 1) pattern.Add(FaceType.Operator);
+            Destroy(diceSlots[i].gameObject);
         }
-        return pattern;
-    }
-
-    private void RebuildSlots()
-    {
-        int operators = 0;
-        int numbers = 0;
-        for (int i = 0; i < die.Length; i++)
-        {
-            int opSides = 0;
-            int numSides = 0;
-            for (int j = 0; j < die[i].faceDefinitions.Length; j++)
-            {
-                if (die[i].faceDefinitions[j] == null)
-                {
-                    numSides++;
-                    continue;
-                }
-                if (die[i].faceDefinitions[j].type == FaceType.Number) numSides++;
-                if (die[i].faceDefinitions[j].type == FaceType.Operator) opSides++;
-            }
-
-            if (opSides > numSides) operators++;
-            else numbers++;
-        }
-        operators = Mathf.Min(operators, numbers - 1);
-        SpawnSlots(GenerateLayout(numbers, operators));
-    }
-
-    public void SpawnSlots(List<FaceType> pattern)
-    {
-        if (diceSlots != null)
-        {
-            for (int i = 0; i < diceSlots.Count; i++)
-            {
-                Destroy(diceSlots[i].gameObject);
-            }
-            diceSlots.Clear();
-        }
+        diceSlots.Clear();
 
         for (int i = 0; i < pattern.Count; i++)
         {
@@ -189,7 +132,7 @@ public class PlayerController : MonoBehaviour
 
         if (diceInSlots == diceSlots.Count)
         {
-            gameController.OnEquationComplete(EvaluateSlots());
+            gameController.OnEquationComplete(this, EvaluateSlots());
         }
         else
         {
@@ -234,7 +177,7 @@ public class PlayerController : MonoBehaviour
         return GameController.Evaluate(faces);
     }
 
-    public string BuildEquation()
+    protected string BuildEquation()
     {
         string text = "";
         for (int i = 0; i < diceSlots.Count; i++)

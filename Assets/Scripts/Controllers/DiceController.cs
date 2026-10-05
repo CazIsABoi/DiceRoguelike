@@ -22,6 +22,7 @@ public class DiceController : MonoBehaviour
     [SerializeField] private int ThrowAttempts = 2;
     [SerializeField] private float killHeight = -0.5f;
     private int StartingThrowAttempts;
+    private Coroutine spawnSettle;
 
     private Camera cam;
     private bool isDragging;
@@ -30,12 +31,14 @@ public class DiceController : MonoBehaviour
     private Vector3 targetPosition;
     private Rigidbody rb;
     private float groundY;
-    private PlayerController playerCon;
     private Die die;
+
+    private DiceSide owner;
+    private bool playerControlled;
 
     private void Awake()
     {
-        playerCon = FindAnyObjectByType<PlayerController>();
+
         die = GetComponent<Die>();
         cam = Camera.main;
         rb = GetComponent<Rigidbody>();
@@ -43,11 +46,13 @@ public class DiceController : MonoBehaviour
         StartingThrowAttempts = ThrowAttempts;
     }
 
-    public void Setup(Transform ground, Transform RespawnPoint)
+    public void Setup(DiceSide owner, Transform ground, Transform RespawnPoint, bool playerControlled)
     {
+        this.owner = owner;
+        this.playerControlled = playerControlled;
         respawnPoint = RespawnPoint;
         groundY = ground.GetComponent<Collider>().bounds.max.y;
-        StartCoroutine(WaitForSpawnSettle());
+        SpawnSettle();
     }
 
     private void OnEnable()
@@ -63,6 +68,7 @@ public class DiceController : MonoBehaviour
 
     private void ToggleLeftClick(bool toggle)
     {
+        if (toggle && !playerControlled) return;
         if (toggle)
         {
             leftClick.action.started += Grab;
@@ -78,6 +84,7 @@ public class DiceController : MonoBehaviour
 
     private void ToggleRightClick(bool toggle)
     {
+        if (toggle && !playerControlled) return;
         if (toggle)
         {
             rightClick.action.started += MoveDiceToSlot;
@@ -103,7 +110,7 @@ public class DiceController : MonoBehaviour
         dragPlane = new Plane(Vector3.up, new Vector3(0f, groundY + liftHeight, 0f));
         rb.useGravity = false;
         spinDirection = Random.onUnitSphere;
-        
+
         if (dragPlane.Raycast(ray, out float distance))
         {
             grabOffset = transform.position - ray.GetPoint(distance);
@@ -204,7 +211,7 @@ public class DiceController : MonoBehaviour
         die.LogTopFace();
         if (ThrowAttempts <= 0)
         {
-            playerCon.MoveDiceToSlot(die);
+            owner.MoveDiceToSlot(die);
         }
         else
         {
@@ -254,11 +261,30 @@ public class DiceController : MonoBehaviour
         }
     }
 
+    public void Throw(Vector3 force, Vector3 torque)
+    {
+        StopCoroutine(WaitForSpawnSettle());
+        rb.isKinematic = false;
+        rb.useGravity = true;
+
+        rb.AddForce(force, ForceMode.Impulse);
+        rb.AddTorque(torque, ForceMode.Impulse);
+
+        ThrowAttempts = 0;
+        StartCoroutine(WaitForSettle());
+    }
+
+    private void SpawnSettle()
+    {
+        if (spawnSettle != null) StopCoroutine(spawnSettle);
+        spawnSettle = StartCoroutine(WaitForSpawnSettle());
+    }
+
     public void ResetForNewRound()
     {
         transform.position = respawnPoint.position;
         rb.isKinematic = false;
-        StartCoroutine(WaitForSpawnSettle());
+        SpawnSettle();
         ThrowAttempts = StartingThrowAttempts;
         transform.rotation = Random.rotation;
     }

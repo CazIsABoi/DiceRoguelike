@@ -7,6 +7,10 @@ public class GameController : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private PlayerController player;
+    [SerializeField] private EnemyController enemy;
+
+    private int? playerResult;
+    private int? enemyResult;
 
     [Header("Score UI")]
     [SerializeField] private TMP_Text scoreText;
@@ -32,24 +36,35 @@ public class GameController : MonoBehaviour
     // ---------- Round flow ----------
 
     // Called by PlayerController when every slot is filled and the last die has landed
-    public void OnEquationComplete(int result)
+    public void OnEquationComplete(DiceSide side, int result)
     {
-        if (roundEnding) return;
-        StartCoroutine(EndRoundRoutine(result));
+        if (side == player) playerResult = result;
+        else enemyResult = result;
+
+        if (playerResult.HasValue && enemyResult.HasValue && !roundEnding)
+        {
+            StartCoroutine(EndRoundRoutine());
+        }
     }
 
-    private IEnumerator EndRoundRoutine(int result)
+    private IEnumerator EndRoundRoutine()
     {
         roundEnding = true;
 
-        score = result;
-        scoreText.text = result.ToString();
-        PlayResultFeedback(result);
+        int diff = playerResult.Value - enemyResult.Value;
+
+        score = diff;
+        scoreText.text = diff.ToString();
+        PlayResultFeedback(diff);
 
         yield return new WaitForSeconds(timeBetweenRounds);
 
         player.ResetRound();
+        enemy.ResetRound();
+        playerResult = null;
+        enemyResult = null;
         roundEnding = false;
+        enemy.StartTurn();
     }
 
     // ---------- Maths (static: anyone can use these, player or enemy) ----------
