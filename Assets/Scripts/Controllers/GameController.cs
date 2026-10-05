@@ -8,6 +8,7 @@ public class GameController : MonoBehaviour
     [Header("References")]
     [SerializeField] private PlayerController player;
     [SerializeField] private EnemyController enemy;
+    [SerializeField] private RewardController reward;
     [SerializeField] private AudioSource audio;
 
     private int? playerResult;
@@ -21,6 +22,7 @@ public class GameController : MonoBehaviour
 
     [Header("Round Flow")]
     [SerializeField] private float timeBetweenRounds = 2f;
+    [SerializeField] FaceDefinition[] rewardPool;
 
     private int score;
     private bool roundEnding;
@@ -56,20 +58,26 @@ public class GameController : MonoBehaviour
 
         int diff = playerResult.Value - enemyResult.Value;
 
-        if (diff < 0)
-        {
-            player.TakeDamage(diff * -1);
-        }
-        else
-        {
-            enemy.TakeDamage(diff);
-        }
+        if (diff < 0) player.TakeDamage(-diff);
+        else if (diff > 0) enemy.TakeDamage(diff);
 
         score = diff;
         scoreText.text = diff.ToString();
         PlayResultFeedback(diff);
 
         yield return new WaitForSeconds(timeBetweenRounds);
+
+        if (player.IsDead)
+        {
+            Debug.Log("Game over");
+            yield break;   // roundEnding stays true, so nothing else starts
+        }
+
+        if (enemy.IsDead)
+        {
+            yield return reward.RewardRoutine(player.GetDice(), rewardPool);
+            enemy.ResetHealth();   // placeholder until there's a next enemy
+        }
 
         player.ResetRound();
         enemy.ResetRound();

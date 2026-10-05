@@ -59,4 +59,6 @@ public class PlayerController : DiceSide
         operators = Mathf.Min(operators, numbers - 1);
         SpawnSlots(GenerateLayout(numbers, operators));
     }
+
+    public Die[] GetDice() { return spawnedDice; }
 }

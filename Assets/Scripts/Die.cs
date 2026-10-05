@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class Die : MonoBehaviour
@@ -7,6 +8,14 @@ public class Die : MonoBehaviour
     [SerializeField] private FaceDefinition blankFace; // For empty sockets
     private FaceDefinition[] currentFaces;
     private FaceView[] spawnedFaces;
+
+    [Header("Face Swap")]
+    [SerializeField] private float flyForce = 2f;
+    [SerializeField] private float spin = 5f;
+    [SerializeField] private float timeToSwitch = 0.5f;
+    [SerializeField] private float slamDistance = 0.5f;   // how far out the new face starts
+
+    // ---------- Setup ----------
 
     public void Initialize(DieDefinition definition)
     {
@@ -25,79 +34,92 @@ public class Die : MonoBehaviour
         }
     }
 
+    // ---------- Faces ----------
+
+    // Instant, no animation. Used by Initialize (and anything else that just needs the data)
     public void SetFace(int index, FaceDefinition face)
     {
-        if (spawnedFaces[index] != null)
+        if (spawnedFaces[index] != null) Destroy(spawnedFaces[index].gameObject);
+        spawnedFaces[index] = Instantiate(face.faceView, sockets[index]);
+        currentFaces[index] = face;
+    }
+
+    // Animated swap, only used by the reward
+    public IEnumerator SwapFace(int index, FaceDefinition face)
+    {
+        // 1. Old face pops off and falls away
+        FaceView oldFace = spawnedFaces[index];
+        if (oldFace != null)
         {
-            Destroy(spawnedFaces[index].gameObject);
+            oldFace.transform.SetParent(null);
+            Rigidbody rb = oldFace.gameObject.AddComponent<Rigidbody>();
+            Vector3 dir = (sockets[index].up + Vector3.up).normalized;
+            rb.AddForce(dir * flyForce, ForceMode.Impulse);
+            rb.AddTorque(Random.onUnitSphere * spin, ForceMode.Impulse);
+            Destroy(oldFace.gameObject, 2f);
         }
-        FaceView newFace = Instantiate(face.faceView, sockets[index]); 
+
+        // 2. Update the data right away, so it's correct even if the animation gets interrupted
+        FaceView newFace = Instantiate(face.faceView, sockets[index]);
         currentFaces[index] = face;
         spawnedFaces[index] = newFace;
+
+        // 3. Slam it in, in socket space, so it follows the die
+        Vector3 target = newFace.transform.localPosition;
+        Vector3 start = target + Vector3.up * slamDistance;   // local up = outward from the die
+        newFace.transform.localPosition = start;
+
+        float elapsed = 0f;
+        while (elapsed < timeToSwitch)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / timeToSwitch;
+            newFace.transform.localPosition = Vector3.Lerp(start, target, t * t);   // speeds up = slam
+            yield return null;
+        }
+        newFace.transform.localPosition = target;
+
+        // 4. Impact: particles, Shake, Punch, thud sound go here
     }
 
-    public FaceDefinition GetTopFace()
+    public FaceDefinition[] GetCurrentFaces() { return currentFaces; }
+
+    // ---------- Orientation ----------
+
+    // Index of the socket pointing most along 'direction'
+    public int GetSocketFacing(Vector3 direction)
     {
-        Vector3 worldDir = Vector3.up;
         int bestIndex = 0;
         float bestDot = -Mathf.Infinity;
 
         for (int i = 0; i < sockets.Length; i++)
         {
-            Vector3 worldAxis = sockets[i].up;
-            float dot = Vector3.Dot(worldAxis, worldDir);
+            float dot = Vector3.Dot(sockets[i].up, direction);
             if (dot > bestDot)
             {
                 bestDot = dot;
                 bestIndex = i;
             }
         }
-        return currentFaces[bestIndex];
+        return bestIndex;
     }
 
-    public Transform GetTopSocket()
-    {
-        Vector3 worldDir = Vector3.up;
-        int bestIndex = 0;
-        float bestDot = -Mathf.Infinity;
+    public Transform GetTopSocket() => sockets[GetSocketFacing(Vector3.up)];
 
-        for (int i = 0; i < sockets.Length; i++)
-        {
-            Vector3 worldAxis = sockets[i].up;
-            float dot = Vector3.Dot(worldAxis, worldDir);
-            if (dot > bestDot)
-            {
-                bestDot = dot;
-                bestIndex = i;
-            }
-        }
-        return sockets[bestIndex].transform;
-    }
+    public FaceDefinition GetTopFace() => currentFaces[GetSocketFacing(Vector3.up)];
 
     public bool IsFlat(float threshold)
     {
-        Vector3 worldDir = Vector3.up;
-        float bestDot = -Mathf.Infinity;
-
-        for (int i = 0; i < sockets.Length; i++)
-        {
-            Vector3 worldAxis = sockets[i].up;
-            float dot = Vector3.Dot(worldAxis, worldDir);
-            if (dot > bestDot)
-            {
-                bestDot = dot;
-            }
-        }
-        return bestDot >= threshold;
+        Transform top = GetTopSocket();
+        return Vector3.Dot(top.up, Vector3.up) >= threshold;
     }
 
     public void LogTopFace()
     {
         FaceDefinition topFace = GetTopFace();
-
         print(topFace.number);
         print(topFace.op);
     }
 
-    public FaceDefinition[] GetCurrentFaces() { return currentFaces; }
+    public FaceView GetFaceView(int index) { return spawnedFaces[index]; }
 }

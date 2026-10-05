@@ -95,6 +95,13 @@ public class DiceController : MonoBehaviour
             rightClick.action.started -= MoveDiceToSlot;
         }
     }
+
+    public void ToggleInputs(bool toggle)
+    {
+        if (toggle && !playerControlled) return;
+        ToggleLeftClick(toggle);
+        ToggleRightClick(toggle);
+    }
     private Ray GetMouseRay()
     {
         Vector2 screenPos = mousePos.action.ReadValue<Vector2>();

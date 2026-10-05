@@ -233,6 +233,8 @@ public abstract class DiceSide : MonoBehaviour
         OnHealthChanged?.Invoke(Health, maxHealth);
     }
 
+    public void ResetHealth() => InitHealth(maxHealth);
+
     public void TakeDamage(int amount)
     {
         Health -= amount;
