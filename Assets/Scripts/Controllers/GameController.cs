@@ -17,8 +17,13 @@ public class GameController : MonoBehaviour
     [Header("Score UI")]
     [SerializeField] private TMP_Text scoreText;
     [SerializeField] private Gradient scoreGradient;
+    [SerializeField] private StripDisplay strip;
     [SerializeField] private float maxLog = 3f;
     [SerializeField] private float maxShake = 15f;
+
+    [Header("Audio")]
+    [SerializeField] private AudioClip winClip;
+    [SerializeField] private AudioClip loseClip;
 
     [Header("Round Flow")]
     [SerializeField] private float timeBetweenRounds = 2f;
@@ -64,6 +69,9 @@ public class GameController : MonoBehaviour
         score = diff;
         scoreText.text = diff.ToString();
         PlayResultFeedback(diff);
+        if (diff > 0) { strip.Flash("YOU WIN", Color.green, timeBetweenRounds); audio.PlayOneShot(winClip); }
+        else if (diff < 0) { strip.Flash("YOU LOST", Color.red, timeBetweenRounds); audio.PlayOneShot(loseClip); }
+        else { strip.Flash("DRAW", Color.white, timeBetweenRounds); }
 
         yield return new WaitForSeconds(timeBetweenRounds);
 
@@ -76,7 +84,7 @@ public class GameController : MonoBehaviour
         if (enemy.IsDead)
         {
             yield return reward.RewardRoutine(player.GetDice(), rewardPool);
-            enemy.ResetHealth();   // placeholder until there's a next enemy
+            enemy.                                 ResetHealth();   // placeholder until there's a next enemy
         }
 
         player.ResetRound();

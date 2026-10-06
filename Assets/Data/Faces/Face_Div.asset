@@ -16,3 +16,4 @@ MonoBehaviour:
   number: 0
   op: 3
   faceView: {fileID: -2132506471943425998, guid: 364adaf88e3724b47a9057a94d791b8e, type: 3}
+  icon: {fileID: 21300000, guid: 242ec5551ac6bd74c9febbb7c8aa2961, type: 3}

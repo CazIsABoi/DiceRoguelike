@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Einstein
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Einstein
-  maxHP: 20
+  maxHP: 1
   dice:
   - {fileID: 11400000, guid: 63b782c351538d4498de2a611ca7b20c, type: 2}
   - {fileID: 11400000, guid: 63b782c351538d4498de2a611ca7b20c, type: 2}

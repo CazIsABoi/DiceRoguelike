@@ -176,7 +176,7 @@ public class DiceController : MonoBehaviour
 
     public void Respawn()
     {
-        if (respawning != null) StopCoroutine(respawning);
+        if (respawning != null) return;   // already on its way back
         respawning = StartCoroutine(RespawnDice(0.5f));
     }
 

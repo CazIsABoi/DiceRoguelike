@@ -10,4 +10,5 @@ public class FaceDefinition : ScriptableObject
     public int number;
     public Operator op;
     public FaceView faceView;
+    public Sprite icon;
 }

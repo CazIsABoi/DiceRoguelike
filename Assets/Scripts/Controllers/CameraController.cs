@@ -8,6 +8,7 @@ public class CameraController : MonoBehaviour
     [SerializeField] private InputActionReference ItemLookInput;
     [SerializeField] private float lookDegrees = 15f;
     [SerializeField] private float timeToLook = .5f;
+    public bool LookEnabled = true;
     private Quaternion restRotation;
     private Quaternion lookRotation;
     private Quaternion itemRotation;
@@ -66,6 +67,7 @@ public class CameraController : MonoBehaviour
     }
     private IEnumerator RotateCamera(float time, Quaternion to)
     {
+        if (!LookEnabled) yield break;
         float elapsed = 0f;
         Quaternion currentRotation = cam.transform.localRotation;
 

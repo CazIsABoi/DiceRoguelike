@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 public class RewardController : MonoBehaviour
 {
@@ -17,23 +18,43 @@ public class RewardController : MonoBehaviour
     [Header("References")]
     [SerializeField] private Camera cam;
     [SerializeField] private Transform inspectPoint;         // child of the camera
-    [SerializeField] private Transform[] offerPoints;        // 3 children of the camera, where the offered faces float
-    [SerializeField] private TMP_Text promptText;            // optional: a line on the dot-matrix sign
+    [SerializeField] private TMP_Text promptText;
+    [SerializeField] private StripDisplay strip;
+    [SerializeField] private Color promptColor = new Color32(0xFF, 0x71, 0x34, 0xFF);
 
     [Header("Feel")]
     [SerializeField] private float moveTime = 0.4f;
     [SerializeField] private float snapTime = 0.15f;
     [SerializeField] private float dragSpeed = 0.3f;
     [SerializeField] private float afterSwapPause = 0.3f;
-    [SerializeField] private float offerScale = 1f;          // size of the offered faces
     [SerializeField] private float hoverScale = 1.15f;       // how much things grow when hovered
-    [SerializeField] private float flingForce = 3f;          // unchosen faces get thrown away
-    [SerializeField] private float flingSpin = 5f;
 
     [Header("Glow")]
     [SerializeField, ColorUsage(true, true)] private Color glowColor = new Color(1f, 0.6f, 0.2f) * 1.5f;
     [SerializeField] private int glowMaterialIndex = -1;     // -1 = whole face, otherwise only that material (e.g. the symbol)
     [SerializeField] private float pulseSpeed = 4f;
+
+    [Header("Views")]
+    [SerializeField] private CameraRig rig;
+    [SerializeField] private CameraController cameraController;
+    [SerializeField] private Transform tableView;
+    [SerializeField] private Transform monitorView;
+    [SerializeField] private Transform diceView;
+
+    [Header("Screen")]
+    [SerializeField] private Collider screenCollider;     // MeshCollider on the screen mesh
+    [SerializeField] private GameObject rewardPanel;      // on the ScreenCanvas, holds the 3 images
+    [SerializeField] private Image[] offerImages;         // left, middle, right
+    [SerializeField] private GameObject equationPanel;    // the equation texts, hidden during the choice
+    [SerializeField] private Color offerColor = new Color32(0xFF, 0x71, 0x34, 0xFF);
+    [SerializeField] private Color dimColor = new Color32(0xFF, 0x71, 0x34, 0x40);
+
+    [Header("Chosen Face")]
+    [SerializeField] private Transform chosenFacePoint;   // child of the camera, bottom corner
+    [SerializeField] private float chosenFaceScale = 0.5f;
+    [SerializeField] private float chosenFaceSpin = 45f;  // degrees per second
+
+    private FaceView chosenFaceView;
 
     private Phase phase = Phase.None;
 
@@ -66,23 +87,31 @@ public class RewardController : MonoBehaviour
     // GameController does: yield return reward.RewardRoutine(player.GetDice(), rewardPool);
     public IEnumerator RewardRoutine(Die[] playerDice, FaceDefinition[] pool)
     {
-        // A. Pick 1 of 3 faces
-        offers = PickOffers(pool, offerPoints.Length);
-        SpawnOffers();
+        cameraController.LookEnabled = false;
+
+        // A. Pick 1 of 3 faces, on the screen
+        offers = PickOffers(pool, offerImages.Length);
+        yield return rig.MoveTo(monitorView);
+        ShowOffers(true);
         chosenFace = null;
-        SetPrompt("PICK A FACE");
+        // A. Pick a face (on the big sign)
+        SetPrompt(promptText, "PICK A FACE");
         phase = Phase.ChooseFace;
         yield return new WaitUntil(() => chosenFace != null);
+        ShowOffers(false);
+        SetPrompt(promptText, "");                 // clear the big sign
 
         // B. Pick which die gets it
+        yield return rig.MoveTo(diceView);
+        ShowChosenFace();
         candidates = playerDice;
         die = null;
-        SetPrompt("PICK A DIE");
+        strip.Show("PICK A DIE", promptColor);
         phase = Phase.ChooseDie;
         yield return new WaitUntil(() => die != null);
         phase = Phase.None;
         ClearHover();
-        ClearOffers();
+        ClearChosenFace();
 
         DiceController controller = die.GetComponent<DiceController>();
         controller.ToggleInputs(false);
@@ -98,11 +127,11 @@ public class RewardController : MonoBehaviour
         selectedIndex = -1;
         confirmed = false;
         lastMousePos = mousePos.action.ReadValue<Vector2>();
-        SetPrompt("PICK A SIDE");
+        strip.Show("PICK A SIDE", promptColor);
         phase = Phase.Inspect;
         yield return new WaitUntil(() => confirmed);
         phase = Phase.None;
-        SetPrompt("");
+        strip.Clear();                  // clear the strip when done
 
         // C3. Swap
         yield return die.SwapFace(selectedIndex, chosenFace);
@@ -113,6 +142,8 @@ public class RewardController : MonoBehaviour
         yield return MoveDieWorld(homePos, homeRot);
 
         die = null;
+        yield return rig.MoveTo(tableView);
+        cameraController.LookEnabled = true;
     }
 
     // ---------- Input ----------
@@ -134,14 +165,18 @@ public class RewardController : MonoBehaviour
         switch (phase)
         {
             case Phase.ChooseFace:
-                int offer = RaycastOffer();
-                UpdateHover(offer >= 0 ? offerViews[offer].transform : null);
+                HighlightOffer(RaycastScreenOption());
                 break;
 
             case Phase.ChooseDie:
                 Die hoverDie = RaycastPlayerDie();
                 UpdateHover(hoverDie != null ? hoverDie.transform : null);
+                if (chosenFaceView != null)
+                {
+                    chosenFaceView.transform.Rotate(Vector3.up, chosenFaceSpin * Time.deltaTime, Space.Self);
+                }
                 break;
+
 
             case Phase.Inspect:
                 UpdateInspect();
@@ -154,19 +189,9 @@ public class RewardController : MonoBehaviour
         switch (phase)
         {
             case Phase.ChooseFace:
-                int index = RaycastOffer();
-                if (index < 0) return;
-                ClearHover();
-                chosenFace = offers[index];
-                for (int i = 0; i < offerViews.Length; i++)
-                {
-                    if (i == index) StripColliders(offerViews[i]);   // keep it visible, but stop it blocking clicks
-                    else
-                    {
-                        Fling(offerViews[i]);
-                        offerViews[i] = null;
-                    }
-                }
+                int option = RaycastScreenOption();
+                if (option < 0) return;
+                chosenFace = offers[option];
                 phase = Phase.None;
                 break;
 
@@ -209,60 +234,49 @@ public class RewardController : MonoBehaviour
         return result;
     }
 
-    private void SpawnOffers()
+    private void ShowOffers(bool on)
     {
-        offerViews = new FaceView[offers.Length];
-        for (int i = 0; i < offers.Length; i++)
+        rewardPanel.SetActive(on);
+        equationPanel.SetActive(!on);
+        if (on)
         {
-            FaceView view = Instantiate(offers[i].faceView, offerPoints[i]);
-            view.transform.localPosition = Vector3.zero;
-            // Face's up (its outward side) points at the camera, its forward points up on screen
-            view.transform.rotation = Quaternion.LookRotation(cam.transform.up, -cam.transform.forward);
-            view.transform.localScale *= offerScale;
-            AddClickCollider(view);
-            offerViews[i] = view;
+            for (int i = 0; i < offerImages.Length; i++)
+            {
+                if (i < offers.Length)
+                {
+                    offerImages[i].sprite = offers[i].icon;
+                    offerImages[i].gameObject.SetActive(true);
+                }
+                else
+                {
+                    offerImages[i].gameObject.SetActive(false);
+                }
+            }
         }
     }
 
-    private int RaycastOffer()
+    private int RaycastScreenOption()
     {
         if (!MouseRaycast(out RaycastHit hit)) return -1;
-        FaceView view = hit.collider.GetComponentInParent<FaceView>();
-        if (view == null) return -1;
-        return System.Array.IndexOf(offerViews, view);
+        if (hit.collider != screenCollider) return -1;
+
+        Vector2 uv = hit.textureCoord;
+        Debug.Log(uv);                       
+
+        float across = uv.x;                 // 0 at the left edge, 1 at the right (hopefully)
+        int option = (int)(across * offers.Length);
+        return Mathf.Clamp(option, 0, offers.Length - 1);
     }
 
-    private void ClearOffers()
+    private void HighlightOffer(int hovered)
     {
-        if (offerViews == null) return;
-        foreach (FaceView view in offerViews)
+        for (int i = 0; i < offerImages.Length; i++)
         {
-            if (view != null) Destroy(view.gameObject);
+            if (i < offers.Length)
+            {
+                offerImages[i].color = (i == hovered || hovered == -1) ? offerColor : dimColor;
+            }
         }
-        offerViews = null;
-    }
-
-    private void Fling(FaceView view)
-    {
-        view.transform.SetParent(null, true);
-        StripColliders(view);
-        Rigidbody rb = view.gameObject.AddComponent<Rigidbody>();
-        Vector3 dir = (cam.transform.up + Random.insideUnitSphere * 0.5f).normalized;
-        rb.AddForce(dir * flingForce, ForceMode.Impulse);
-        rb.AddTorque(Random.onUnitSphere * flingSpin, ForceMode.Impulse);
-        Destroy(view.gameObject, 2f);
-    }
-
-    private void AddClickCollider(FaceView view)
-    {
-        if (view.GetComponentInChildren<Collider>() != null) return;
-        MeshRenderer mesh = view.GetComponentInChildren<MeshRenderer>();
-        if (mesh != null) mesh.gameObject.AddComponent<BoxCollider>();   // auto-fits the mesh
-    }
-
-    private void StripColliders(FaceView view)
-    {
-        foreach (Collider c in view.GetComponentsInChildren<Collider>()) Destroy(c);
     }
 
     // ---------- Phase B: dice ----------
@@ -273,6 +287,21 @@ public class RewardController : MonoBehaviour
         Die hitDie = hit.collider.GetComponentInParent<Die>();
         if (hitDie == null || System.Array.IndexOf(candidates, hitDie) < 0) return null;   // only the player's dice
         return hitDie;
+    }
+
+    private void ShowChosenFace()
+    {
+        FaceView newChosenFace = Instantiate(chosenFace.faceView, chosenFacePoint);
+        newChosenFace.transform.localPosition = Vector3.zero;
+        newChosenFace.transform.localScale *= chosenFaceScale;
+        newChosenFace.transform.rotation = Quaternion.LookRotation(cam.transform.up, -cam.transform.forward);
+        chosenFaceView = newChosenFace;
+    }
+
+    private void ClearChosenFace()
+    {
+        if (chosenFaceView != null) Destroy(chosenFaceView.gameObject);
+        chosenFaceView = null;
     }
 
     // ---------- Phase C: inspect ----------
@@ -361,9 +390,9 @@ public class RewardController : MonoBehaviour
         }
     }
 
-    private void SetPrompt(string text)
+    private void SetPrompt(TMP_Text textComponent, string text)
     {
-        if (promptText != null) promptText.text = text;
+        if (textComponent != null) textComponent.text = text;
     }
 
     // ---------- Movement ----------

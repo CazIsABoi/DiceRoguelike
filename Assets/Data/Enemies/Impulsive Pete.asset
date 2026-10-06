@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Impulsive Pete
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Impulsive Pete
-  maxHP: 20
+  maxHP: 1
   dice:
   - {fileID: 11400000, guid: d40a6186bc2bbcf4b95aa4c8f07892d3, type: 2}
   - {fileID: 11400000, guid: d40a6186bc2bbcf4b95aa4c8f07892d3, type: 2}
