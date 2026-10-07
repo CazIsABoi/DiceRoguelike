@@ -12,6 +12,7 @@ public abstract class DiceSide : MonoBehaviour
 
     [Header("Health")]
     [SerializeField] protected int maxHealth = 100;
+    public int MaxHealth => maxHealth;
     public int Health { get; private set; }
     public bool IsDead => Health <= 0;
     public event System.Action<int, int> OnHealthChanged; // (current, max)
@@ -28,7 +29,6 @@ public abstract class DiceSide : MonoBehaviour
     [Header("Dice")]
     [SerializeField] private Die diePrefab; // Prefab
     protected Die[] spawnedDice;
-    [SerializeField] private float dieHeight = 0.5f;
     [SerializeField] private Transform spawnPoint; // Where dice spawn
     [SerializeField] private Transform ground;
 
@@ -51,13 +51,16 @@ public abstract class DiceSide : MonoBehaviour
         spawnedDice = new Die[dice.Length];
         for (int i = 0; i < dice.Length; i++)
         {
-            Die newDie = Instantiate(diePrefab, spawnPoint.position, Random.rotation);
-            spawnedDice[i] = newDie;
-            spawnedDice[i].Initialize(dice[i]);
-
-            DiceController controller = newDie.GetComponent<DiceController>();
-            controller.Setup(this, ground, spawnPoint, IsPlayerControlled);
+            spawnedDice[i] = SpawnOneDie(dice[i]);
         }
+    }
+    protected Die SpawnOneDie(DieDefinition def)
+    {
+        Die prefab = def.prefab != null ? def.prefab : diePrefab;
+        Die newDie = Instantiate(prefab, spawnPoint.position, Random.rotation);
+        newDie.Initialize(def);
+        newDie.GetComponent<DiceController>().Setup(this, ground, spawnPoint, IsPlayerControlled);
+        return newDie;
     }
     protected void DestroyDice()
     {
@@ -144,7 +147,8 @@ public abstract class DiceSide : MonoBehaviour
         Vector3 localUp = dice.InverseTransformDirection(top.up);
         Vector3 localForward = dice.InverseTransformDirection(top.forward);
         Quaternion targetRot = slot.rotation * Quaternion.Inverse(Quaternion.LookRotation(localForward, localUp));
-        Vector3 targetPos = slot.position + slot.up * dieHeight;
+        float restHeight = Vector3.Distance(top.position, dice.position);   // center to the top face
+        Vector3 targetPos = slot.position + slot.up * restHeight;
 
         while (elapsed < moveTime)
         {
@@ -259,9 +263,12 @@ public abstract class DiceSide : MonoBehaviour
     {
         if (bustedDice.Contains(die)) return;
         bustedDice.Add(die);
+        OnBusted(die);
         equationText.text = BuildEquation();
         CheckComplete();
     }
+
+    protected virtual void OnBusted(Die die) { }
 
     private void CheckComplete()
     {
@@ -284,6 +291,7 @@ public abstract class DiceSide : MonoBehaviour
     }
 
     #region Health
+
     protected void InitHealth(int max)
     {
         maxHealth = max;
@@ -295,10 +303,14 @@ public abstract class DiceSide : MonoBehaviour
 
     public void TakeDamage(int amount)
     {
-        Health -= amount;
-        if (Health <= 0) Health = 0;
+        Health = Mathf.Max(0, Health - amount);
         OnHealthChanged?.Invoke(Health, maxHealth);
     }
 
+    public void Heal(int amount)
+    {
+        Health = Mathf.Min(maxHealth, Health + amount);
+        OnHealthChanged?.Invoke(Health, maxHealth);
+    }
     #endregion
 }

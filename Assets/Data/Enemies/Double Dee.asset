@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
+  m_Name: Double Dee
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  displayName: Double Dee
+  maxHP: 21
+  dice:
+  - {fileID: 11400000, guid: 77b1f8d31ae12b14f8b4781549e1c87a, type: 2}
+  - {fileID: 11400000, guid: 77b1f8d31ae12b14f8b4781549e1c87a, type: 2}
+  - {fileID: 11400000, guid: abc53b7dd462d7044b9d089100d06ab7, type: 2}
+  layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
+  brain: 1
+  throwAttempts: 1
+  blunderChance: 0
+  rethrowBelow: 4
+  minGain: 2
+  voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  portrait: {fileID: 0}
+  portraitTalk: {fileID: 0}
+  intro: Double or nothing, baby!
+  winLines:
+  - Times two! Times TWO!
+  - Multiply the pain!
+  - Twice the fun for me.
+  loseLines:
+  - Halved? Me? Rude.
+  - Double fault...
+  - That's a one-time thing.
+  bustLines:
+  - Too much of me to fit!
+  - Overflow! Oops.
+  defeatLine: Double KO. On me.
+  unlockFaces:
+  - {fileID: 11400000, guid: 314e91faef7426a4bb4886b709de9119, type: 2}
+  dieDrop: {fileID: 0}

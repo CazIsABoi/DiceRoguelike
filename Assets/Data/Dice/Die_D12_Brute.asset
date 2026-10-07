@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a129d87d9d976a4996a84f43e301b3c, type: 3}
+  m_Name: Die_D12_Brute
+  m_EditorClassIdentifier: Assembly-CSharp::DieDefinition
+  displayName: D12
+  faceDefinitions:
+  - {fileID: 11400000, guid: a43e2067aebe52e43801dd6f7f6f1432, type: 2}
+  - {fileID: 11400000, guid: ab304ee57c3df5544b6a152fb5baf412, type: 2}
+  - {fileID: 11400000, guid: ab304ee57c3df5544b6a152fb5baf412, type: 2}
+  - {fileID: 11400000, guid: 83c643d52ed689b46a4b9ab4770eea56, type: 2}
+  - {fileID: 11400000, guid: b6f26c91f884209448196ada423e87f8, type: 2}
+  - {fileID: 11400000, guid: 62b1d415312324a40b3f5943b9c6fcf1, type: 2}
+  - {fileID: 11400000, guid: c019a029488eaa64a90ae0f0ba0f2842, type: 2}
+  - {fileID: 11400000, guid: 252adc53d36cc0e4c99ce3812a094820, type: 2}
+  - {fileID: 11400000, guid: ab304ee57c3df5544b6a152fb5baf412, type: 2}
+  - {fileID: 11400000, guid: 83c643d52ed689b46a4b9ab4770eea56, type: 2}
+  - {fileID: 11400000, guid: ab15ac082cd6fbc40bd4baf7c7712ec7, type: 2}
+  - {fileID: 11400000, guid: ab15ac082cd6fbc40bd4baf7c7712ec7, type: 2}
+  prefab: {fileID: 4062360055529501214, guid: 1a8ea633cf273114dbf108c002bce9c7, type: 3}
+  icon: {fileID: 21300000, guid: 2dcb4d988440cb34a903b46206fa3adb, type: 3}

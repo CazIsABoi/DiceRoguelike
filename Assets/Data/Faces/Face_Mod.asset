@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e42b46e1a1423954ab61c4012732d45f, type: 3}
+  m_Name: Face_Mod
+  m_EditorClassIdentifier: Assembly-CSharp::FaceDefinition
+  type: 1
+  number: 0
+  op: 4
+  faceView: {fileID: -3694259243769566118, guid: 4e38ce7c35ee3434e83cb82ab2aa2e1d, type: 3}
+  icon: {fileID: 21300000, guid: 8439e5eec6568e547964973fc40eb8ca, type: 3}

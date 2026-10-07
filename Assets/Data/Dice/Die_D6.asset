@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a129d87d9d976a4996a84f43e301b3c, type: 3}
+  m_Name: Die_D6
+  m_EditorClassIdentifier: Assembly-CSharp::DieDefinition
+  displayName: D6
+  faceDefinitions:
+  - {fileID: 11400000, guid: f7de75a565c984945809e2b275413372, type: 2}
+  - {fileID: 11400000, guid: b6f26c91f884209448196ada423e87f8, type: 2}
+  - {fileID: 11400000, guid: 5d236b8d31be4b8408858fce223f1007, type: 2}
+  - {fileID: 11400000, guid: a43e2067aebe52e43801dd6f7f6f1432, type: 2}
+  - {fileID: 11400000, guid: 6da9918a1636d144f997709ffa15ff7e, type: 2}
+  - {fileID: 11400000, guid: 62b1d415312324a40b3f5943b9c6fcf1, type: 2}
+  prefab: {fileID: 0}
+  icon: {fileID: 21300000, guid: 433ddd394a772954a92142d34499fc24, type: 3}

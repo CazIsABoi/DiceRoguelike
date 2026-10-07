@@ -375,8 +375,15 @@ MonoBehaviour:
   - {fileID: 4136912985039080470}
   - {fileID: 3872585199498133797}
   - {fileID: 2583667446625936941}
+  faceScale: 1
+  faceDepth: 0.3
   testDefinition: {fileID: 11400000, guid: d40a6186bc2bbcf4b95aa4c8f07892d3, type: 2}
   blankFace: {fileID: 11400000, guid: ae16b36ba5075b04fbd44b195af56a49, type: 2}
+  flyForce: 2
+  spin: 5
+  timeToSwitch: 0.5
+  slamDistance: 0.5
+  numeralFace: {fileID: 0}
 --- !u!1 &8098256737540095724
 GameObject:
   m_ObjectHideFlags: 0

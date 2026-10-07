@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c276af8402f2e244d9f8f84cf46f87ab, type: 3}
   m_Name: Dice_5
   m_EditorClassIdentifier: Assembly-CSharp::SlotLayout
-  pattern: 0000000000000000010000000000000000000000i
+  pattern: 0000000001000000000000000100000000000000i

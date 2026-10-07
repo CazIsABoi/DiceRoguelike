@@ -21,6 +21,11 @@ public class EnemyDefinition : ScriptableObject
     [Range(0f, 1f)] public float blunderChance = 0f;   // chance to skip thinking and just slap dice in
     public int rethrowBelow = 2;                       // Greedy: rethrows numbers under this
     public float minGain = 2f;                         // Calculating: how sure it must be before risking a rethrow
+    public AudioClip voice;
+
+    [Header("Portrait")]
+    public Sprite portrait;        // idle
+    public Sprite portraitTalk;    // mouth open 
 
     [Header("Flavour")]
     [TextArea] public string intro;    // when it sits down
@@ -28,4 +33,8 @@ public class EnemyDefinition : ScriptableObject
     public string[] loseLines;         // it lost a turn
     public string[] bustLines;         // it busted
     public string defeatLine;          // knocked out
+
+    [Header("Rewards")]
+    public FaceDefinition[] unlockFaces;   // added to the reward pool when this enemy is beaten
+    public DieDefinition dieDrop;          // offered as the special reward, act bosses only
 }

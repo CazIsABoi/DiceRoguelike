@@ -38,19 +38,14 @@ public class PlayerController : DiceSide
     {
         int operators = 0;
         int numbers = 0;
-        for (int i = 0; i < die.Length; i++)
+        foreach (Die d in spawnedDice)
         {
             int opSides = 0;
             int numSides = 0;
-            for (int j = 0; j < die[i].faceDefinitions.Length; j++)
+            foreach (FaceDefinition face in d.GetCurrentFaces())
             {
-                if (die[i].faceDefinitions[j] == null)
-                {
-                    numSides++;
-                    continue;
-                }
-                if (die[i].faceDefinitions[j].type == FaceType.Number) numSides++;
-                if (die[i].faceDefinitions[j].type == FaceType.Operator) opSides++;
+                if (face.type == FaceType.Operator) opSides++;
+                else numSides++;
             }
 
             if (opSides > numSides) operators++;
@@ -58,6 +53,13 @@ public class PlayerController : DiceSide
         }
         operators = Mathf.Min(operators, numbers - 1);
         SpawnSlots(GenerateLayout(numbers, operators));
+    }
+    public void AddDie(DieDefinition def)
+    {
+        Die newDie = SpawnOneDie(def);
+        System.Array.Resize(ref spawnedDice, spawnedDice.Length + 1);
+        spawnedDice[spawnedDice.Length - 1] = newDie;
+        RebuildSlots();
     }
 
     public Die[] GetDice() { return spawnedDice; }

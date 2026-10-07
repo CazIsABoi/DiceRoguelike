@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
+  m_Name: Quartz
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  displayName: Quartz
+  maxHP: 22
+  dice:
+  - {fileID: 11400000, guid: 75885bc0e5455a94b86732214b96a260, type: 2}
+  - {fileID: 11400000, guid: 1a54226f810f47f489a70ce557846960, type: 2}
+  - {fileID: 11400000, guid: 75885bc0e5455a94b86732214b96a260, type: 2}
+  layout: {fileID: 11400000, guid: 7c23da8478adfaa42a56f331a5c41966, type: 2}
+  brain: 2
+  throwAttempts: 1
+  blunderChance: 0
+  rethrowBelow: 2
+  minGain: 2
+  voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  portrait: {fileID: 0}
+  portraitTalk: {fileID: 0}
+  intro: The crystals foresaw you.
+  winLines:
+  - As it was written.
+  - The primes never lie.
+  - I saw this coming.
+  loseLines:
+  - The stars are... cloudy.
+  - A minor misreading.
+  - Fate is being shy.
+  bustLines:
+  - The crystals are restless.
+  - An omen. A bad one.
+  defeatLine: Take my seven. It chose you.
+  unlockFaces:
+  - {fileID: 11400000, guid: c019a029488eaa64a90ae0f0ba0f2842, type: 2}
+  dieDrop: {fileID: 0}

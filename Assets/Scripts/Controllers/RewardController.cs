@@ -21,6 +21,7 @@ public class RewardController : MonoBehaviour
     [SerializeField] private TMP_Text promptText;
     [SerializeField] private StripDisplay strip;
     [SerializeField] private Color promptColor = new Color32(0xFF, 0x71, 0x34, 0xFF);
+    [SerializeField] private FaceView numeralPreview;
 
     [Header("Feel")]
     [SerializeField] private float moveTime = 0.4f;
@@ -31,7 +32,6 @@ public class RewardController : MonoBehaviour
 
     [Header("Glow")]
     [SerializeField, ColorUsage(true, true)] private Color glowColor = new Color(1f, 0.6f, 0.2f) * 1.5f;
-    [SerializeField] private int glowMaterialIndex = -1;     // -1 = whole face, otherwise only that material (e.g. the symbol)
     [SerializeField] private float pulseSpeed = 4f;
 
     [Header("Views")]
@@ -54,12 +54,16 @@ public class RewardController : MonoBehaviour
     [SerializeField] private float chosenFaceScale = 0.5f;
     [SerializeField] private float chosenFaceSpin = 45f;  // degrees per second
 
+    [Header("Offers")]
+    [SerializeField] private Sprite healIcon;
+    private RewardOffer chosen;
+
     private FaceView chosenFaceView;
 
     private Phase phase = Phase.None;
 
     // Phase A: choose a face
-    private FaceDefinition[] offers;
+    private List<RewardOffer> offers;
     private FaceView[] offerViews;
     private FaceDefinition chosenFace;
 
@@ -85,22 +89,10 @@ public class RewardController : MonoBehaviour
     // ---------- Entry point ----------
 
     // GameController does: yield return reward.RewardRoutine(player.GetDice(), rewardPool);
-    public IEnumerator RewardRoutine(Die[] playerDice, FaceDefinition[] pool)
+    public IEnumerator FaceRewardRoutine(Die[] playerDice)
     {
-        cameraController.LookEnabled = false;
-
-        // A. Pick 1 of 3 faces, on the screen
-        offers = PickOffers(pool, offerImages.Length);
-        yield return rig.MoveTo(monitorView);
-        ShowOffers(true);
-        chosenFace = null;
-        // A. Pick a face (on the big sign)
-        SetPrompt(promptText, "PICK A FACE");
-        phase = Phase.ChooseFace;
-        yield return new WaitUntil(() => chosenFace != null);
-        ShowOffers(false);
-        SetPrompt(promptText, "");                 // clear the big sign
-
+        // A is done in RewardRoutine, chosenFace is already set
+    
         // B. Pick which die gets it
         yield return rig.MoveTo(diceView);
         ShowChosenFace();
@@ -142,6 +134,40 @@ public class RewardController : MonoBehaviour
         yield return MoveDieWorld(homePos, homeRot);
 
         die = null;
+    }
+
+    public IEnumerator RewardRoutine(PlayerController player, FaceDefinition[] facePool, DieDefinition diePool, int healAmount)
+    {
+        cameraController.LookEnabled = false;
+
+        offers = BuildOffers(player, facePool, diePool, healAmount);
+        yield return rig.MoveTo(monitorView);
+        ShowOffers(true);
+        chosen = null;
+        SetPrompt(promptText, "PICK A REWARD");
+        phase = Phase.ChooseFace;
+        yield return new WaitUntil(() => chosen != null);
+        ShowOffers(false);
+        SetPrompt(promptText, "");
+
+        switch (chosen.kind)
+        {
+            case RewardKind.Face:
+                chosenFace = chosen.face;
+                yield return FaceRewardRoutine(player.GetDice());
+                break;
+
+            case RewardKind.Heal:
+                player.Heal(chosen.heal);
+                yield return new WaitForSeconds(1f);   // let the nixies flicker up
+                break;
+
+            case RewardKind.Die:
+                player.AddDie(chosen.die);
+                yield return new WaitForSeconds(1f);
+                break;
+        }
+
         yield return rig.MoveTo(tableView);
         cameraController.LookEnabled = true;
     }
@@ -191,7 +217,7 @@ public class RewardController : MonoBehaviour
             case Phase.ChooseFace:
                 int option = RaycastScreenOption();
                 if (option < 0) return;
-                chosenFace = offers[option];
+                chosen = offers[option];
                 phase = Phase.None;
                 break;
 
@@ -242,7 +268,7 @@ public class RewardController : MonoBehaviour
         {
             for (int i = 0; i < offerImages.Length; i++)
             {
-                if (i < offers.Length)
+                if (i < offers.Count)
                 {
                     offerImages[i].sprite = offers[i].icon;
                     offerImages[i].gameObject.SetActive(true);
@@ -264,19 +290,50 @@ public class RewardController : MonoBehaviour
         Debug.Log(uv);                       
 
         float across = uv.x;                 // 0 at the left edge, 1 at the right (hopefully)
-        int option = (int)(across * offers.Length);
-        return Mathf.Clamp(option, 0, offers.Length - 1);
+        int option = (int)(across * offers.Count);
+        return Mathf.Clamp(option, 0, offers.Count - 1);
     }
-
-    private void HighlightOffer(int hovered)
+    private void HighlightOffer(int hoveredOption)
     {
         for (int i = 0; i < offerImages.Length; i++)
         {
-            if (i < offers.Length)
-            {
-                offerImages[i].color = (i == hovered || hovered == -1) ? offerColor : dimColor;
-            }
+            if (i < offers.Count)
+                offerImages[i].color = (i == hoveredOption || hoveredOption == -1) ? offerColor : dimColor;
         }
+        SetPrompt(promptText, hoveredOption >= 0 ? offers[hoveredOption].label : "PICK A REWARD");
+    }
+    private List<RewardOffer> BuildOffers(PlayerController player, FaceDefinition[] facePool, DieDefinition dieDrop, int healAmount)
+    {
+        List<RewardOffer> result = new List<RewardOffer>();
+
+        // 1. Two different faces (your PickOffers already avoids duplicates)
+        foreach (FaceDefinition f in PickOffers(facePool, 2))
+            result.Add(new RewardOffer { kind = RewardKind.Face, face = f, icon = f.icon, label = "NEW FACE" });
+
+        if (dieDrop != null)
+        {
+            result.Add(new RewardOffer { kind = RewardKind.Die, die = dieDrop, icon = dieDrop.icon, label = "NEW " + dieDrop.displayName });
+        }
+        else if (player.Health < player.MaxHealth)
+        {
+            result.Add(new RewardOffer { kind = RewardKind.Heal, heal = healAmount, icon = healIcon, label = "+" + healAmount + " HP" });
+        }
+        else
+        {
+            FaceDefinition f = PickOffers(facePool, 1)[0];
+            result.Add(new RewardOffer { kind = RewardKind.Face, face = f, icon = f.icon, label = "NEW FACE" });
+        }
+
+        // 3. Shuffle, so the special isn't always on the right
+        for (int i = 0; i < result.Count; i++)
+        {
+            int j = Random.Range(i, result.Count);
+            RewardOffer temp = result[i];
+            result[i] = result[j];
+            result[j] = temp;
+        }
+
+        return result;
     }
 
     // ---------- Phase B: dice ----------
@@ -291,7 +348,14 @@ public class RewardController : MonoBehaviour
 
     private void ShowChosenFace()
     {
-        FaceView newChosenFace = Instantiate(chosenFace.faceView, chosenFacePoint);
+        FaceView newChosenFace;
+        if (chosenFace.faceView != null) newChosenFace = Instantiate(chosenFace.faceView, chosenFacePoint);
+        else
+        {
+            newChosenFace = Instantiate(numeralPreview, chosenFacePoint);   // new [SerializeField] FaceView numeralPreview
+            newChosenFace.SetLabel(chosenFace.type == FaceType.Operator
+                ? GameController.OpSymbol(chosenFace.op) : chosenFace.number.ToString());
+        }
         newChosenFace.transform.localPosition = Vector3.zero;
         newChosenFace.transform.localScale *= chosenFaceScale;
         newChosenFace.transform.rotation = Quaternion.LookRotation(cam.transform.up, -cam.transform.forward);
@@ -368,26 +432,7 @@ public class RewardController : MonoBehaviour
 
     private void SetGlow(FaceView face, float intensity)
     {
-        if (face == null) return;
-        MeshRenderer renderer = face.GetComponentInChildren<MeshRenderer>();
-        if (renderer == null) return;
-
-        if (glowBlock == null) glowBlock = new MaterialPropertyBlock();
-        Color color = glowColor * intensity;   // intensity 0 = black = off
-
-        bool oneMaterial = glowMaterialIndex >= 0 && glowMaterialIndex < renderer.sharedMaterials.Length;
-        if (oneMaterial)
-        {
-            renderer.GetPropertyBlock(glowBlock, glowMaterialIndex);
-            glowBlock.SetColor("_EmissionColor", color);
-            renderer.SetPropertyBlock(glowBlock, glowMaterialIndex);
-        }
-        else
-        {
-            renderer.GetPropertyBlock(glowBlock);
-            glowBlock.SetColor("_EmissionColor", color);
-            renderer.SetPropertyBlock(glowBlock);
-        }
+        if (face != null) face.SetHighlight(intensity);
     }
 
     private void SetPrompt(TMP_Text textComponent, string text)
@@ -445,5 +490,16 @@ public class RewardController : MonoBehaviour
         }
         die.transform.rotation = target;
         isSnapping = false;
+    }
+    public enum RewardKind { Face, Die, Heal }
+
+    public class RewardOffer
+    {
+        public RewardKind kind;
+        public FaceDefinition face;   // kind == Face
+        public DieDefinition die;     // kind == Die
+        public int heal;              // kind == Heal
+        public Sprite icon;           // what the dot screen shows
+        public string label;          // what the sign says when you hover it
     }
 }

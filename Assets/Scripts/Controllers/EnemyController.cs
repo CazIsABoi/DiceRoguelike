@@ -14,6 +14,7 @@ public class EnemyController : DiceSide
     private List<Die> landedDice = new List<Die>();
     public string DisplayName => enemy.displayName;
     private Coroutine throwRoutine;
+    [SerializeField] private DialogueDisplay dialogue;
 
     // Anything can listen to this later (a speech bubble, a log panel...)
     public event System.Action<string> OnThought;
@@ -22,7 +23,7 @@ public class EnemyController : DiceSide
 
     public void Load(EnemyDefinition def)
     {
-        StopCoroutine(throwRoutine);
+        if (throwRoutine != null) StopCoroutine(throwRoutine);
         DestroyDice();
         landedDice.Clear();
         enemy = def;
@@ -211,7 +212,7 @@ public class EnemyController : DiceSide
         switch (brain)
         {
             case EnemyBrain.Greedy:
-                if (face.type == FaceType.Number && face.number < 2) return true;
+                if (face.type == FaceType.Number && face.number < enemy.rethrowBelow) return true;
                 else if (face.type == FaceType.Operator && (face.op == Operator.Subtract || face.op == Operator.Divide)) return true;
                 else return false;
             default:
@@ -319,4 +320,23 @@ public class EnemyController : DiceSide
         list[a] = list[b];
         list[b] = temp;
     }
+
+    // ---------- Dialogue ----------
+    private void Say(string line) => dialogue.Say(line);
+
+    private void SayOneOf(string[] lines)
+    {
+        if (lines == null || lines.Length == 0) return;
+        Say(lines[Random.Range(0, lines.Length)]);
+    }
+
+    public void SayIntro()
+{
+    dialogue.SetSpeaker(enemy.portrait, enemy.portraitTalk, enemy.voice);
+    dialogue.SayNow(enemy.intro);
+}
+    public void SayDefeat() => dialogue.SayNow(enemy.defeatLine);
+    public void SayTurnResult(bool iWon) => SayOneOf(iWon ? enemy.winLines : enemy.loseLines);
+
+    protected override void OnBusted(Die die) => SayOneOf(enemy.bustLines);
 }

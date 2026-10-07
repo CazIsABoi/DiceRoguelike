@@ -1,7 +1,7 @@
 using UnityEngine;
 
 public enum FaceType { Number, Operator }
-public enum Operator { Add, Subtract, Multiply, Divide }
+public enum Operator { Add, Subtract, Multiply, Divide, Modulus }
 
 [CreateAssetMenu(fileName = "NewFace", menuName = "Dice/Face")]
 public class FaceDefinition : ScriptableObject

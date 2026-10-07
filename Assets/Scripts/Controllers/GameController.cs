@@ -41,6 +41,9 @@ public class GameController : MonoBehaviour
     [Header("Round Flow")]
     [SerializeField] private float timeBetweenRounds = 2f;
     [SerializeField] FaceDefinition[] rewardPool;
+    private List<FaceDefinition> facePool;
+    [SerializeField] private DieDefinition[] diePool;
+    [SerializeField] private int healAmount = 20;
 
     private int score;
     private bool roundEnding;
@@ -54,6 +57,8 @@ public class GameController : MonoBehaviour
         QualitySettings.vSyncCount = 0;
         Application.targetFrameRate = 144;
         scoreText.text = "0";
+        facePool = new List<FaceDefinition>(rewardPool);
+        StartCoroutine(BeginFight());
     }
 
     // ---------- Round flow ----------
@@ -73,9 +78,8 @@ public class GameController : MonoBehaviour
     {
         EnemyDefinition def = ladder[Fight - 1];   // Fight starts at 1
         enemy.Load(def);
-
+        enemy.SayIntro();
         scoreText.text = "VS " + def.displayName.ToUpper();
-        // later: def.intro in the dialogue box
         yield return new WaitForSeconds(introTime);
         scoreText.text = "";
 
@@ -94,6 +98,8 @@ public class GameController : MonoBehaviour
         score = diff;
         scoreText.text = diff.ToString();
         PlayResultFeedback(diff);
+        if (enemy.IsDead) enemy.SayDefeat();
+        else if (diff != 0) enemy.SayTurnResult(diff < 0);   // diff < 0 = the enemy won the turn
         if (diff > 0)
         {
             strip.Flash("YOU WIN", Color.green, timeBetweenRounds);
@@ -112,8 +118,9 @@ public class GameController : MonoBehaviour
 
         if (enemy.IsDead)
         {
-            // later: def.defeatLine in the dialogue box
-            yield return reward.RewardRoutine(player.GetDice(), rewardPool);
+            EnemyDefinition beaten = ladder[Fight - 1];
+            facePool.AddRange(beaten.unlockFaces);
+            yield return reward.RewardRoutine(player, facePool.ToArray(), beaten.dieDrop, healAmount);
             Fight++;
 
             if (Fight > ladder.Length)
@@ -189,6 +196,13 @@ public class GameController : MonoBehaviour
                     return 0;
                 }
                 return Mathf.CeilToInt((float)a / b);
+            case Operator.Modulus:
+                if (b == 0)
+                {
+                    Debug.Log("Modulus by Zero");
+                    return 0;
+                }
+                return a % b;
         }
         return 0;
     }
@@ -201,6 +215,7 @@ public class GameController : MonoBehaviour
             case Operator.Subtract: return "-";
             case Operator.Multiply: return "×";
             case Operator.Divide: return "÷";
+            case Operator.Modulus: return "%";
         }
         return "?";
     }
