@@ -21,7 +21,7 @@ public class NixieDisplay : MonoBehaviour
 
         for (int i = 0; i < tubes.Length; i++)
         {
-            bool changed = lastDigits != null && lastDigits[i] != digits[i];
+            bool changed = lastDigits != null && i < lastDigits.Length && lastDigits[i] != digits[i];
             if (changed)
             {
                 if (flickers[i] != null) StopCoroutine(flickers[i]);

@@ -24,6 +24,7 @@ public class DiceController : MonoBehaviour
     [SerializeField] private float killHeight = -0.5f;
     private int StartingThrowAttempts;
     private Coroutine spawnSettle;
+    private Coroutine wobbleRoutine;
 
     private Camera cam;
     private bool isDragging;
@@ -63,8 +64,7 @@ public class DiceController : MonoBehaviour
 
     private void OnDisable()
     {
-        ToggleLeftClick(false);
-        ToggleRightClick(false);
+        ToggleInputs(false);
     }
 
     private void ToggleLeftClick(bool toggle)
@@ -184,21 +184,25 @@ public class DiceController : MonoBehaviour
     {
         yield return new WaitForSeconds(moveTime);
 
-        if (rb.isKinematic != true) rb.linearVelocity = Vector3.zero;
-        Vector3 startPos = transform.position;
-        Quaternion startRot = transform.rotation;
-        float elapsed = 0f;
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+        rb.isKinematic = true;
 
+        Vector3 startPos = transform.position;
         Vector3 targetPos = respawnPoint.position;
+        float elapsed = 0f;
 
         while (elapsed < moveTime)
         {
             elapsed += Time.deltaTime;
-            float t = elapsed / moveTime;
-            t = Mathf.SmoothStep(0f, 1f, t);
+            float t = Mathf.SmoothStep(0f, 1f, elapsed / moveTime);
             transform.position = Vector3.Lerp(startPos, targetPos, t);
             yield return null;
         }
+
+        transform.position = targetPos;
+        rb.isKinematic = false;
+        respawning = null;
     }
 
     public int GetThrowAttempts() { return ThrowAttempts; }
@@ -213,8 +217,34 @@ public class DiceController : MonoBehaviour
     private void MoveDiceToSlot(InputAction.CallbackContext context)
     {
         if (!IsMouseOverMe()) return;
-        ThrowAttempts = 0;
-        CheckThrowAttempts();
+        if (!owner.HasSlotFor(die) && ThrowAttempts > 0 && owner.CouldFitLater(die))
+        {
+            if (wobbleRoutine == null) wobbleRoutine = StartCoroutine(Wobble());
+            return;           
+        }
+        else
+        {
+            owner.MoveDiceToSlot(die);
+            ToggleInputs(false);
+        }
+    }
+
+    private IEnumerator Wobble()
+    {
+        Quaternion startRot = transform.rotation;
+        float elapsed = 0f;
+        float wobbleTime = 0.2f;
+        float wobbleAngle = 15f;
+        while (elapsed < wobbleTime)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / wobbleTime;
+            t = Mathf.Sin(t * Mathf.PI * 4f) * (1f - t); // oscillate and fade out
+            transform.rotation = startRot * Quaternion.Euler(0f, 0f, wobbleAngle * t);
+            yield return null;
+        }
+        transform.rotation = startRot; // reset to original rotation
+        wobbleRoutine = null;
     }
 
     private bool IsMouseOverMe()
@@ -226,14 +256,15 @@ public class DiceController : MonoBehaviour
 
     private IEnumerator WaitForSettle()
     {
-        ToggleLeftClick(false);
-        ToggleRightClick(false);
+        ToggleInputs(false);
         yield return new WaitForSeconds(0.3f); // give it time to actually start falling
 
         int nudges = 0;
         while (true)
         {
-            while (rb.linearVelocity.sqrMagnitude > 0.01f || rb.angularVelocity.sqrMagnitude > 0.01f)
+            while (respawning != null
+                   || rb.linearVelocity.sqrMagnitude > 0.01f
+                   || rb.angularVelocity.sqrMagnitude > 0.01f)
             {
                 yield return null;
             }
@@ -255,8 +286,7 @@ public class DiceController : MonoBehaviour
         if (ThrowAttempts <= 0 || !playerControlled) owner.MoveDiceToSlot(die);
         else
         {
-            ToggleLeftClick(true);
-            ToggleRightClick(true);
+            ToggleInputs(true);
             rb.isKinematic = true;
         }
     }
@@ -267,7 +297,9 @@ public class DiceController : MonoBehaviour
         int nudges = 0;
         while (true)
         {
-            while (rb.linearVelocity.sqrMagnitude > 0.01f || rb.angularVelocity.sqrMagnitude > 0.01f)
+            while (respawning != null
+                   || rb.linearVelocity.sqrMagnitude > 0.01f
+                   || rb.angularVelocity.sqrMagnitude > 0.01f)
             {
                 yield return null;
             }
@@ -287,8 +319,7 @@ public class DiceController : MonoBehaviour
         }
 
         rb.isKinematic = true;
-        ToggleLeftClick(true);
-        ToggleRightClick(true);
+        ToggleInputs(true);
     }
 
     private void PlayDiceRotation(float timeBetween)

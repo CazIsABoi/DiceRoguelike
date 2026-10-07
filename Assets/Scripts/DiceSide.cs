@@ -23,6 +23,7 @@ public abstract class DiceSide : MonoBehaviour
     [SerializeField] private DiceSlot slotPrefab;
     [SerializeField] private float spacing = 1.2f;
     [SerializeField] private Transform anchor;
+    public bool HasSlotFor(Die die) => ChooseSlot(die) != null;
 
     [Header("Dice")]
     [SerializeField] private Die diePrefab; // Prefab
@@ -30,6 +31,11 @@ public abstract class DiceSide : MonoBehaviour
     [SerializeField] private float dieHeight = 0.5f;
     [SerializeField] private Transform spawnPoint; // Where dice spawn
     [SerializeField] private Transform ground;
+
+    [Header("Bust")]
+    [SerializeField] private FaceDefinition numberFiller;     // a number face with value 0
+    [SerializeField] private FaceDefinition operatorFiller;   // your + face
+    protected List<Die> bustedDice = new List<Die>();
 
     [Header("UI")]
     [SerializeField] protected TMP_Text equationText;
@@ -53,6 +59,17 @@ public abstract class DiceSide : MonoBehaviour
             controller.Setup(this, ground, spawnPoint, IsPlayerControlled);
         }
     }
+    protected void DestroyDice()
+    {
+        if (spawnedDice == null) return;   // first fight: nothing to destroy yet
+        foreach (Die d in spawnedDice)
+        {
+            if (d != null) Destroy(d.gameObject);
+        }
+        spawnedDice = null;
+        diceInSlots = 0;
+        bustedDice.Clear();
+    }
 
     // Called by GameController when it's time for a new round
     public void ResetRound()
@@ -68,6 +85,7 @@ public abstract class DiceSide : MonoBehaviour
         }
 
         diceInSlots = 0;
+        bustedDice.Clear();
         equationText.text = BuildEquation();
     }
 
@@ -95,7 +113,7 @@ public abstract class DiceSide : MonoBehaviour
     public virtual void MoveDiceToSlot(Die die)
     {
         DiceSlot slot = ChooseSlot(die);
-        if (slot == null) return;      // no free slot, stays physical
+        if (slot == null) { Bust(die); return; }
         PlaceInSlot(die, slot);
     }
     protected virtual DiceSlot ChooseSlot(Die die)
@@ -144,14 +162,7 @@ public abstract class DiceSide : MonoBehaviour
         diceInSlots++;
         equationText.text = BuildEquation();
 
-        if (diceInSlots == diceSlots.Count)
-        {
-            gameController.OnEquationComplete(this, EvaluateSlots());
-        }
-        else
-        {
-            PunchEquation(1.15f, 0.2f);
-        }
+        CheckComplete();
     }
 
     private static readonly Vector3[] axes =
@@ -186,9 +197,14 @@ public abstract class DiceSide : MonoBehaviour
         List<FaceDefinition> faces = new List<FaceDefinition>();
         for (int i = 0; i < diceSlots.Count; i++)
         {
+            if (diceSlots[i].IsEmpty)
+            {
+                faces.Add(diceSlots[i].AcceptableFace == FaceType.Number ? numberFiller : operatorFiller);  
+                continue;
+            }
             faces.Add(diceSlots[i].CurrentDie.GetTopFace());
         }
-        return GameController.Evaluate(faces);
+        return GameController.Evaluate(faces) - BustPenalty();
     }
 
     protected string BuildEquation()
@@ -198,8 +214,9 @@ public abstract class DiceSide : MonoBehaviour
         {
             if (diceSlots[i].IsEmpty)
             {
-                if (diceSlots[i].AcceptableFace == FaceType.Number) text += "_";
-                else text += "?";
+                bool filled = bustedDice.Count > 0;   // after a bust, empty slots get their filler
+                if (diceSlots[i].AcceptableFace == FaceType.Number) text += filled ? "0" : "_";
+                else text += filled ? GameController.OpSymbol(operatorFiller.op) : "?";
                 continue;
             }
 
@@ -216,6 +233,7 @@ public abstract class DiceSide : MonoBehaviour
         audio.pitch = Random.Range(.5f, 1.5f);
         audio.PlayOneShot(equationSFX);
         audio.pitch = 1f;
+        if (bustedDice.Count > 0) text += " - " + BustPenalty();
         return text;
     }
 
@@ -223,6 +241,46 @@ public abstract class DiceSide : MonoBehaviour
     {
         if (equationPunchRoutine != null) StopCoroutine(equationPunchRoutine);
         equationPunchRoutine = StartCoroutine(GameController.Punch(equationText.transform, scale, duration, 0f));
+    }
+    public bool CouldFitLater(Die die)
+    {
+        foreach (FaceDefinition face in die.GetCurrentFaces())
+        {
+            if (face == null) continue;
+            foreach (DiceSlot slot in diceSlots)
+            {
+                if (slot.IsEmpty && slot.AcceptableFace == face.type) return true;
+            }
+        }
+        return false;
+    }
+
+    protected void Bust(Die die)
+    {
+        if (bustedDice.Contains(die)) return;
+        bustedDice.Add(die);
+        equationText.text = BuildEquation();
+        CheckComplete();
+    }
+
+    private void CheckComplete()
+    {
+        if (diceInSlots + bustedDice.Count == spawnedDice.Length)
+        {
+            gameController.OnEquationComplete(this, EvaluateSlots());
+        }
+        else PunchEquation(1.15f, 0.2f);
+    }
+
+    private int BustPenalty()
+    {
+        int total = 0;
+        foreach (Die die in bustedDice)
+        {
+            FaceDefinition face = die.GetTopFace();
+            total += face.type == FaceType.Number ? face.number : gameController.OperatorBustPenalty;
+        }
+        return total;
     }
 
     #region Health

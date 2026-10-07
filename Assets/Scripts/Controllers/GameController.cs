@@ -2,6 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 public class GameController : MonoBehaviour
 {
@@ -21,9 +23,20 @@ public class GameController : MonoBehaviour
     [SerializeField] private float maxLog = 3f;
     [SerializeField] private float maxShake = 15f;
 
+    [Header("Bust")]
+    [SerializeField] private int bustBase = 3;
+    public int Fight { get; private set; } = 1;
+    public int OperatorBustPenalty => bustBase * Fight;
+
     [Header("Audio")]
     [SerializeField] private AudioClip winClip;
+    [SerializeField] private AudioClip turnWinClip;
     [SerializeField] private AudioClip loseClip;
+
+    [Header("Run")]
+    [SerializeField] private EnemyDefinition[] ladder;
+    [SerializeField] private float introTime = 2f;
+    [SerializeField] private InputActionReference clickAction;   // your LMB action
 
     [Header("Round Flow")]
     [SerializeField] private float timeBetweenRounds = 2f;
@@ -56,6 +69,18 @@ public class GameController : MonoBehaviour
             StartCoroutine(EndRoundRoutine());
         }
     }
+    private IEnumerator BeginFight()
+    {
+        EnemyDefinition def = ladder[Fight - 1];   // Fight starts at 1
+        enemy.Load(def);
+
+        scoreText.text = "VS " + def.displayName.ToUpper();
+        // later: def.intro in the dialogue box
+        yield return new WaitForSeconds(introTime);
+        scoreText.text = "";
+
+        enemy.StartTurn();
+    }
 
     private IEnumerator EndRoundRoutine()
     {
@@ -69,7 +94,11 @@ public class GameController : MonoBehaviour
         score = diff;
         scoreText.text = diff.ToString();
         PlayResultFeedback(diff);
-        if (diff > 0) { strip.Flash("YOU WIN", Color.green, timeBetweenRounds); audio.PlayOneShot(winClip); }
+        if (diff > 0)
+        {
+            strip.Flash("YOU WIN", Color.green, timeBetweenRounds);
+            audio.PlayOneShot(enemy.IsDead ? winClip : turnWinClip);
+        }
         else if (diff < 0) { strip.Flash("YOU LOST", Color.red, timeBetweenRounds); audio.PlayOneShot(loseClip); }
         else { strip.Flash("DRAW", Color.white, timeBetweenRounds); }
 
@@ -77,14 +106,28 @@ public class GameController : MonoBehaviour
 
         if (player.IsDead)
         {
-            Debug.Log("Game over");
-            yield break;   // roundEnding stays true, so nothing else starts
+            yield return EndRun("GAME OVER", Color.red);
+            yield break;
         }
 
         if (enemy.IsDead)
         {
+            // later: def.defeatLine in the dialogue box
             yield return reward.RewardRoutine(player.GetDice(), rewardPool);
-            enemy.                                 ResetHealth();   // placeholder until there's a next enemy
+            Fight++;
+
+            if (Fight > ladder.Length)
+            {
+                yield return EndRun("YOU WIN", Color.green);
+                yield break;
+            }
+
+            player.ResetRound();
+            playerResult = null;
+            enemyResult = null;
+            roundEnding = false;
+            yield return BeginFight();   // next enemy, intro, then it throws
+            yield break;
         }
 
         player.ResetRound();
@@ -93,6 +136,14 @@ public class GameController : MonoBehaviour
         enemyResult = null;
         roundEnding = false;
         enemy.StartTurn();
+    }
+    private IEnumerator EndRun(string message, Color color)
+    {
+        scoreText.text = message;
+        strip.Show("CLICK", color);
+        yield return new WaitUntil(() => clickAction.action.WasPressedThisFrame());
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        yield break;
     }
 
     // ---------- Maths (static: anyone can use these, player or enemy) ----------

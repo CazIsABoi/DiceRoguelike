@@ -9,7 +9,6 @@ public class EnemyController : DiceSide
     [SerializeField] private float throwForce = 10f;
     [SerializeField] private float sidewaysForce = 10f;
     [SerializeField] private float spinForce = 10f;
-    [SerializeField] private float minGain = 2f;
     private EnemyBrain brain => enemy.brain;
     private int throwAttempts => enemy.throwAttempts;
     private List<Die> landedDice = new List<Die>();
@@ -20,13 +19,17 @@ public class EnemyController : DiceSide
     public event System.Action<string> OnThought;
 
     // Start: spawn enemy.dice, spawn slots from enemy.layout.pattern
-    private void Start()
+
+    public void Load(EnemyDefinition def)
     {
+        StopCoroutine(throwRoutine);
+        DestroyDice();
+        landedDice.Clear();
+        enemy = def;
         InitHealth(enemy.maxHP);
         SpawnDice(enemy.dice);
         SpawnSlots(new List<FaceType>(enemy.layout.pattern));
         equationText.text = BuildEquation();
-        StartTurn();
     }
 
     public void StartTurn()
@@ -131,6 +134,13 @@ public class EnemyController : DiceSide
 
     private void PlaceAll()
     {
+        if (Random.value < enemy.blunderChance)
+        {
+            Think("Eh, whatever.");
+            foreach (Die d in landedDice) base.MoveDiceToSlot(d);
+            return;
+        }
+
         switch (brain)
         {
             case EnemyBrain.Greedy:
@@ -154,9 +164,28 @@ public class EnemyController : DiceSide
                 int o = 0;
                 foreach (DiceSlot slot in diceSlots)
                 {
-                    if (slot.AcceptableFace == FaceType.Number) { PlaceInSlot(numberDice[n], slot); n++; }
-                    else { PlaceInSlot(operatorDice[o], slot); o++; }
+                    if (slot.AcceptableFace == FaceType.Number)
+                    {
+                        if (n < numberDice.Count)
+                        {
+                            PlaceInSlot(numberDice[n], slot);
+                            n++;
+                        }
+                    }
+                    else
+                    {
+                        if (o < operatorDice.Count)
+                        {
+                            PlaceInSlot(operatorDice[o], slot);
+                            o++;
+                        }
+                    }
                 }
+
+                // 4. Whatever didn't get a slot is busted
+                for (int i = n; i < numberDice.Count; i++) Bust(numberDice[i]);
+                for (int i = o; i < operatorDice.Count; i++) Bust(operatorDice[i]);
+
                 break;
 
             case EnemyBrain.Calculating:
@@ -223,7 +252,7 @@ public class EnemyController : DiceSide
 
             Think($"If I rethrow the {Describe(die.GetTopFace())}, I'd expect about {average:0.#} ({gain:+0.#;-0.#}).");
 
-            if (gain > bestGain && gain > minGain)
+            if (gain > bestGain && gain > enemy.minGain)
             {
                 bestGain = gain;
                 bestDie = die;
