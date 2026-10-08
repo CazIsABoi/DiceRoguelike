@@ -18,7 +18,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 77b1f8d31ae12b14f8b4781549e1c87a, type: 2}
   - {fileID: 11400000, guid: 77b1f8d31ae12b14f8b4781549e1c87a, type: 2}
   - {fileID: 11400000, guid: abc53b7dd462d7044b9d089100d06ab7, type: 2}
-  layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
+  layout: {fileID: 11400000, guid: 7c23da8478adfaa42a56f331a5c41966, type: 2}
   brain: 1
   throwAttempts: 1
   blunderChance: 0

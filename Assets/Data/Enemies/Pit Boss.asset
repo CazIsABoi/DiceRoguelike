@@ -29,18 +29,18 @@ MonoBehaviour:
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
-  intro: Name's Lou. Feeling lucky?
+  intro: The House sent me. Sit.
   winLines:
-  - Let it ride!
-  - House money, kid.
-  - Lady Luck likes me.
+  - The floor takes its cut.
+  - Another one for the House.
+  - Nothing personal. Math.
   loseLines:
-  - Cold dice. Happens.
-  - Just warming 'em up.
-  - Again. Same bet.
+  - Lucky. Don't get used to it.
+  - I've seen worse hands win.
+  - The night is young.
   bustLines:
-  - Bad beat!
-  - Snake eyes on the felt...
-  defeatLine: Keep the lucky one. I'm out.
+  - Who loaded these dice?
+  - That roll never happened.
+  defeatLine: Fine. The House will see you.
   unlockFaces: []
   dieDrop: {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}

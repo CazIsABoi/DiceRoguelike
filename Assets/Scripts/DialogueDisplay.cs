@@ -7,6 +7,7 @@ using UnityEngine.UI;
 public class DialogueDisplay : MonoBehaviour
 {
     [SerializeField] private TMP_Text text;
+    [SerializeField] private TMP_Text nameLabel;   // sits above or beside the text box
     [SerializeField] private AudioSource voiceSource;   // its own AudioSource, see the note below
     [SerializeField] private AudioClip voice;
     [SerializeField] private float charDelay = 0.04f;
@@ -67,8 +68,9 @@ public class DialogueDisplay : MonoBehaviour
         }
         playRoutine = null;
     }
-    public void SetSpeaker(Sprite idle, Sprite talk, AudioClip voiceClip)
+    public void SetSpeaker(string speakerName, Sprite idle, Sprite talk, AudioClip voiceClip)
     {
+        if (nameLabel != null) nameLabel.text = speakerName.ToUpper();
         idleSprite = idle;
         talkSprite = talk != null ? talk : idle;   // no talk frame = just don't animate
         portrait.sprite = idleSprite;

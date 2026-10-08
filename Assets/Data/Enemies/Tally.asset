@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
   m_Name: Tally
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  displayName: Knuckles
+  displayName: Tally
   maxHP: 18
   dice:
   - {fileID: 11400000, guid: 38871db142b5f6248a4a887c6a67a502, type: 2}

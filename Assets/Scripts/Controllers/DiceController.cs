@@ -220,6 +220,7 @@ public class DiceController : MonoBehaviour
         if (!owner.HasSlotFor(die) && ThrowAttempts > 0 && owner.CouldFitLater(die))
         {
             if (wobbleRoutine == null) wobbleRoutine = StartCoroutine(Wobble());
+            Tutorial.Hint("wobble", "NO SLOT FOR THAT FACE · THROW IT AGAIN");
             return;           
         }
         else
@@ -271,8 +272,8 @@ public class DiceController : MonoBehaviour
 
             if (die.IsFlat(0.95f)) break;
 
-            rb.AddForce(Vector3.up * 3f, ForceMode.Impulse);
-            rb.AddTorque(Random.onUnitSphere * 2f, ForceMode.Impulse);
+            rb.AddForce(Vector3.up * 2f, ForceMode.Impulse);
+            rb.AddTorque(Random.onUnitSphere * 1.5f, ForceMode.Impulse);
             nudges++;
 
             if (nudges == 5)
@@ -288,6 +289,7 @@ public class DiceController : MonoBehaviour
         {
             ToggleInputs(true);
             rb.isKinematic = true;
+            if (playerControlled) Tutorial.Hint("lock", "RIGHT CLICK TO LOCK IT IN · OR DRAG TO THROW AGAIN");
         }
     }
     private IEnumerator WaitForSpawnSettle()

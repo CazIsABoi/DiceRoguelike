@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+using UnityEngine.Networking;  
 
 public class GameController : MonoBehaviour
 {
@@ -36,17 +37,32 @@ public class GameController : MonoBehaviour
     [Header("Run")]
     [SerializeField] private EnemyDefinition[] ladder;
     [SerializeField] private float introTime = 2f;
-    [SerializeField] private InputActionReference clickAction;   // your LMB action
 
     [Header("Round Flow")]
     [SerializeField] private float timeBetweenRounds = 2f;
     [SerializeField] FaceDefinition[] rewardPool;
     private List<FaceDefinition> facePool;
-    [SerializeField] private DieDefinition[] diePool;
     [SerializeField] private int healAmount = 20;
+
+    [Header("End Screen")]
+    [SerializeField] private GameObject endPanel;
+    [SerializeField] private TMP_Text endTitle;   // "THANKS FOR PLAYING" / "GAME OVER"
+    [SerializeField] private CameraRig rig;
+    [SerializeField] private Transform monitorView;
+    [SerializeField] private GameObject equationPanel;   // hide it, like the reward screen does
+    [SerializeField] private TMP_Text endStats;
+
+    private const string formUrl = "https://docs.google.com/forms/d/e/1FAIpQLScix26Ts907fGNdApSgtKu10-K0fdspGZps9k1Yjl9vXGlMGg/viewform";
+    private const string resultEntry = "entry.2115005332";
+    private const string fightEntry = "entry.1084623422";
+    private const string beatenEntry = "entry.1538550322";
+    private const string minutesEntry = "entry.522183546";
+    private const string diceEntry = "entry.1966468218";
+    private const string versionEntry = "entry.173446048";
 
     private int score;
     private bool roundEnding;
+    private bool runWon;
     private Coroutine scorePunchRoutine;
     private Coroutine scoreFadeRoutine;
 
@@ -54,8 +70,10 @@ public class GameController : MonoBehaviour
 
     private void Start()
     {
+    #if !UNITY_WEBGL
         QualitySettings.vSyncCount = 0;
         Application.targetFrameRate = 144;
+    #endif
         scoreText.text = "0";
         facePool = new List<FaceDefinition>(rewardPool);
         StartCoroutine(BeginFight());
@@ -79,9 +97,11 @@ public class GameController : MonoBehaviour
         EnemyDefinition def = ladder[Fight - 1];   // Fight starts at 1
         enemy.Load(def);
         enemy.SayIntro();
-        scoreText.text = "VS " + def.displayName.ToUpper();
+        strip.Flash($"VS {enemy.DisplayName}", Color.red, 3f);
         yield return new WaitForSeconds(introTime);
         scoreText.text = "";
+
+        if (Fight == 1) Tutorial.Hint("throw", "DRAG A DIE AND LET GO TO THROW IT");
 
         enemy.StartTurn();
     }
@@ -112,22 +132,22 @@ public class GameController : MonoBehaviour
 
         if (player.IsDead)
         {
-            yield return EndRun("GAME OVER", Color.red);
+            yield return EndRun(false);
             yield break;
         }
 
         if (enemy.IsDead)
         {
+            if (Fight == ladder.Length)          // beat the last enemy: no reward screen
+            {
+                yield return EndRun(true);
+                yield break;
+            }
+
             EnemyDefinition beaten = ladder[Fight - 1];
             facePool.AddRange(beaten.unlockFaces);
             yield return reward.RewardRoutine(player, facePool.ToArray(), beaten.dieDrop, healAmount);
             Fight++;
-
-            if (Fight > ladder.Length)
-            {
-                yield return EndRun("YOU WIN", Color.green);
-                yield break;
-            }
 
             player.ResetRound();
             playerResult = null;
@@ -144,13 +164,59 @@ public class GameController : MonoBehaviour
         roundEnding = false;
         enemy.StartTurn();
     }
-    private IEnumerator EndRun(string message, Color color)
+    private IEnumerator EndRun(bool won)
     {
-        scoreText.text = message;
-        strip.Show("CLICK", color);
-        yield return new WaitUntil(() => clickAction.action.WasPressedThisFrame());
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-        yield break;
+        equationPanel.SetActive(false);
+        endPanel.SetActive(true);
+        endStats.text = won ? $"ALL {ladder.Length} FIGHTS CLEARED"
+                            : $"REACHED FIGHT {Fight} · BEATEN BY {ladder[Fight - 1].displayName.ToUpper()}";
+        yield return rig.MoveTo(monitorView);
+
+        runWon = won;
+        endTitle.text = won ? "THANKS FOR PLAYING" : "GAME OVER";
+        scoreText.text = won ? "YOU WIN" : "GAME OVER";
+        strip.Show(won ? "THANKS FOR PLAYING" : "BETTER LUCK NEXT TIME", won ? Color.green : Color.red);
+
+        Camera.main.GetComponent<CameraController>().enabled = false;
+        foreach (Die die in player.GetDice()) die.GetComponent<DiceController>().ToggleInputs(false);
+        yield break;   // the buttons take it from here
+    }
+    public void OpenSurvey() => Application.OpenURL(BuildSurveyUrl());
+    public void PlayAgain() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    public void ToMenu() => SceneManager.LoadScene("MainMenu");
+    private string BuildSurveyUrl()
+    {
+        string beatenBy = runWon ? "Nobody" : ladder[Fight - 1].displayName;
+        int minutes = Mathf.RoundToInt(Time.timeSinceLevelLoad / 60f);
+
+        string baseUrl = formUrl.Split('?')[0];   // drops "?usp=dialog" or anything else after viewform
+
+        string url = baseUrl + "?usp=pp_url"
+            + Field(resultEntry, runWon ? "Won" : "Lost")
+            + Field(fightEntry, Fight.ToString())
+            + Field(beatenEntry, beatenBy)
+            + Field(minutesEntry, minutes.ToString())
+            + Field(diceEntry, DescribeDice())
+            + Field(versionEntry, Application.version);
+
+        Debug.Log("Survey URL: " + url);
+        return url;
+    }
+
+    private string Field(string entry, string value) => "&" + entry + "=" + UnityWebRequest.EscapeURL(value);
+
+    // e.g. "[1 2 3 4 5 9] [+ + + × × ÷] [1 2 3 4 7 6]"
+    private string DescribeDice()
+    {
+        string text = "";
+        foreach (Die die in player.GetDice())
+        {
+            text += "[";
+            foreach (FaceDefinition f in die.GetCurrentFaces())
+                text += (f.type == FaceType.Number ? f.number.ToString() : OpSymbol(f.op)) + " ";
+            text = text.TrimEnd() + "] ";
+        }
+        return text.TrimEnd();
     }
 
     // ---------- Maths (static: anyone can use these, player or enemy) ----------

@@ -2623,6 +2623,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 9eb2aa582372c7646bb419bb38436f8c, type: 2}
   - {fileID: 11400000, guid: 7a31fcbb03a1fe14885abbba9dd049de, type: 2}
   - {fileID: 11400000, guid: 03ec75399411d4d4a92ab36b99e19c91, type: 2}
+  - {fileID: 11400000, guid: c4ee6cbd22fc47f459b32c2ddc747d70, type: 2}
+  - {fileID: 11400000, guid: 15a184b881667064887ae7c1612d49d9, type: 2}
   introTime: 2
   clickAction: {fileID: -5030714410365570689, guid: 0125415ae5945e04d9bd22af7861c4a7, type: 3}
   timeBetweenRounds: 2
@@ -2630,7 +2632,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a43e2067aebe52e43801dd6f7f6f1432, type: 2}
   - {fileID: 11400000, guid: 62b1d415312324a40b3f5943b9c6fcf1, type: 2}
   diePool: []
-  healAmount: 25
+  healAmount: 40
 --- !u!1 &547511417
 GameObject:
   m_ObjectHideFlags: 0

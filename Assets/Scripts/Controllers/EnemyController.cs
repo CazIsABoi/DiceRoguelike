@@ -332,8 +332,8 @@ public class EnemyController : DiceSide
 
     public void SayIntro()
 {
-    dialogue.SetSpeaker(enemy.portrait, enemy.portraitTalk, enemy.voice);
-    dialogue.SayNow(enemy.intro);
+        dialogue.SetSpeaker(enemy.displayName, enemy.portrait, enemy.portraitTalk, enemy.voice);
+        dialogue.SayNow(enemy.intro);
 }
     public void SayDefeat() => dialogue.SayNow(enemy.defeatLine);
     public void SayTurnResult(bool iWon) => SayOneOf(iWon ? enemy.winLines : enemy.loseLines);

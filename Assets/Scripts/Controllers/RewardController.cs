@@ -120,6 +120,7 @@ public class RewardController : MonoBehaviour
         confirmed = false;
         lastMousePos = mousePos.action.ReadValue<Vector2>();
         strip.Show("PICK A SIDE", promptColor);
+        Tutorial.Hint("side", "RIGHT DRAG OR Q/E TO TURN · CLICK A SIDE TWICE TO PICK IT");
         phase = Phase.Inspect;
         yield return new WaitUntil(() => confirmed);
         phase = Phase.None;
