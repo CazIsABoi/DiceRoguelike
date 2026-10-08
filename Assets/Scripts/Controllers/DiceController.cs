@@ -19,18 +19,35 @@ public class DiceController : MonoBehaviour
     private Transform respawnPoint;
     private Coroutine respawning;
 
+    [Header("Rethrow Safety")]
+    [SerializeField] private bool confirmBestFace = true;   // rethrowing the best face on the die needs a second grab
+    [SerializeField] private float confirmWindow = 2.5f;    // seconds the second grab counts as "yes"
+    private float confirmUntil = -1f;
+    private bool hasLanded;                                 // thrown and settled at least once this round
+
+    [Header("Landing")]
+    [SerializeField] private float flatThreshold = 0.95f;
+    [SerializeField] private float straightenLift = 0.2f;   // a tilted die is lifted this much, straightened, then dropped
+    [SerializeField] private float straightenTime = 0.15f;
+
     [Header("Game Variables")]
     [SerializeField] private int ThrowAttempts = 2;
     [SerializeField] private float killHeight = -0.5f;
     private int StartingThrowAttempts;
     private Coroutine spawnSettle;
     private Coroutine wobbleRoutine;
+    private Quaternion wobbleBase;
 
     private Camera cam;
     private bool isDragging;
+    private bool puttingBack;
+    private Vector2 grabMouse;
+    private bool inputsOn;
     private Plane dragPlane;
     private Vector3 grabOffset;
     private Vector3 targetPosition;
+    private Vector3 restPos;
+    private Quaternion restRot;
     private Rigidbody rb;
     private float groundY;
     private Die die;
@@ -40,11 +57,9 @@ public class DiceController : MonoBehaviour
 
     private void Awake()
     {
-
         die = GetComponent<Die>();
         cam = Camera.main;
         rb = GetComponent<Rigidbody>();
-
         StartingThrowAttempts = ThrowAttempts;
     }
 
@@ -54,12 +69,8 @@ public class DiceController : MonoBehaviour
         this.playerControlled = playerControlled;
         respawnPoint = RespawnPoint;
         groundY = ground.GetComponent<Collider>().bounds.max.y;
+        hasLanded = false;
         SpawnSettle();
-    }
-
-    private void OnEnable()
-    {
-
     }
 
     private void OnDisable()
@@ -67,65 +78,73 @@ public class DiceController : MonoBehaviour
         ToggleInputs(false);
     }
 
-    private void ToggleLeftClick(bool toggle)
+    // ---------- Input ----------
+
+    public void ToggleInputs(bool toggle)
     {
         if (toggle && !playerControlled) return;
+        if (toggle == inputsOn) return;   // never subscribe twice (that made one click count double)
+        inputsOn = toggle;
+
         if (toggle)
         {
             leftClick.action.started += Grab;
             leftClick.action.canceled += Drop;
+            rightClick.action.started += MoveDiceToSlot;
         }
         else
         {
             leftClick.action.started -= Grab;
             leftClick.action.canceled -= Drop;
-        }
-    }
-
-
-    private void ToggleRightClick(bool toggle)
-    {
-        if (toggle && !playerControlled) return;
-        if (toggle)
-        {
-            rightClick.action.started += MoveDiceToSlot;
-        }
-        else
-        {
             rightClick.action.started -= MoveDiceToSlot;
         }
     }
 
-    public void ToggleInputs(bool toggle)
-    {
-        if (toggle && !playerControlled) return;
-        ToggleLeftClick(toggle);
-        ToggleRightClick(toggle);
-    }
     private Ray GetMouseRay()
     {
         Vector2 screenPos = mousePos.action.ReadValue<Vector2>();
         return cam.ScreenPointToRay(screenPos);
     }
 
+    private bool IsMouseOverMe()
+    {
+        return Physics.Raycast(GetMouseRay(), out RaycastHit hit) && hit.transform == transform;
+    }
+
+    // ---------- Grab, drag, throw ----------
+
     private void Grab(InputAction.CallbackContext context)
     {
+        if (puttingBack || !IsMouseOverMe()) return;
+
+        // Grabbing your best face asks first. The second grab within the window goes through.
+        if (NeedsConfirm())
+        {
+            confirmUntil = Time.time + confirmWindow;
+            StartWobble();
+            Tutorial.Notice($"THROW AWAY THE {Describe(die.GetTopFace())}? GRAB IT AGAIN");
+            return;
+        }
+        confirmUntil = -1f;
+        StopWobble();
+
         Ray ray = GetMouseRay();
-
-        if (!IsMouseOverMe()) return;
-        rb.isKinematic = false;
-
         dragPlane = new Plane(Vector3.up, new Vector3(0f, groundY + liftHeight, 0f));
+        if (!dragPlane.Raycast(ray, out float distance)) return;
+        grabMouse = mousePos.action.ReadValue<Vector2>();
+
+        // Remember where it was, so a click without a real drag can put it back
+        restPos = transform.position;
+        restRot = transform.rotation;
+        targetPosition = transform.position;
+
+        rb.isKinematic = false;
         rb.useGravity = false;
         spinDirection = Random.onUnitSphere;
-
-        if (dragPlane.Raycast(ray, out float distance))
-        {
-            grabOffset = transform.position - ray.GetPoint(distance);
-            isDragging = true;
-            grabOffset.y = 0f;
-            PlayDiceRotation(1f);
-        }
+        grabOffset = transform.position - ray.GetPoint(distance);
+        grabOffset.y = 0f;
+        isDragging = true;
+        PlayDiceRotation(1f);
     }
 
     private void Update()
@@ -141,27 +160,10 @@ public class DiceController : MonoBehaviour
     private void Drag()
     {
         Ray ray = GetMouseRay();
-
         if (dragPlane.Raycast(ray, out float distance))
         {
             targetPosition = ray.GetPoint(distance) + grabOffset;
         }
-    }
-
-    private void Drop(InputAction.CallbackContext context)
-    {
-        if (!isDragging) return;
-
-        Vector3 v = rb.linearVelocity;
-        if (v.y > 0f) v.y = 0f;
-        rb.linearVelocity = v;
-
-        isDragging = false;
-        rb.useGravity = true;
-        rb.linearVelocity = Vector3.ClampMagnitude(rb.linearVelocity, maxSpeed);
-
-        ThrowAttempts--;
-        CheckThrowAttempts();
     }
 
     private void FixedUpdate()
@@ -169,10 +171,177 @@ public class DiceController : MonoBehaviour
         if (!isDragging) return;
 
         Vector3 toTarget = targetPosition - rb.position;
-
         rb.linearVelocity = toTarget * followSpeed;
         rb.angularVelocity = spinDirection * spinStrength;
     }
+
+    private void Drop(InputAction.CallbackContext context)
+    {
+        if (!isDragging) return;
+        isDragging = false;
+
+        Vector2 moved = mousePos.action.ReadValue<Vector2>() - grabMouse;
+        if (moved.magnitude < 5f)   // pixels: a click, not a throw
+        {
+            StartCoroutine(PutBack());
+            return;
+        }
+
+        Vector3 v = rb.linearVelocity;
+        if (v.y > 0f) v.y = 0f;
+        rb.linearVelocity = Vector3.ClampMagnitude(v, maxSpeed);
+        rb.useGravity = true;
+
+        ThrowAttempts--;
+        Tutorial.Done("throw");
+        Tutorial.Done("lock");     // the hint says "lock it in OR throw again", so throwing again counts too
+        Tutorial.Done("noslot");
+        StartCoroutine(WaitForSettle());
+    }
+
+    private IEnumerator PutBack()
+    {
+        puttingBack = true;
+        rb.useGravity = true;
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+        rb.isKinematic = true;
+
+        Vector3 fromPos = transform.position;
+        Quaternion fromRot = transform.rotation;
+        const float time = 0.15f;
+        for (float t = 0f; t < time; t += Time.deltaTime)
+        {
+            float k = Mathf.SmoothStep(0f, 1f, t / time);
+            transform.SetPositionAndRotation(Vector3.Lerp(fromPos, restPos, k), Quaternion.Slerp(fromRot, restRot, k));
+            yield return null;
+        }
+        transform.SetPositionAndRotation(restPos, restRot);
+        puttingBack = false;
+    }
+
+    // ---------- Rethrow safety ----------
+
+    private bool NeedsConfirm()
+    {
+        if (!confirmBestFace || !hasLanded || Time.time <= confirmUntil) return false;
+        if (!owner.HasSlotFor(die)) return false;   // it doesn't fit anyway, so rethrowing is the right call
+        FaceDefinition top = die.GetTopFace();
+        return top != null && IsBestFace(top);
+    }
+
+    // True if no face on this die beats the one showing (a 6 on a plain D6, a × on an operator die)
+    private bool IsBestFace(FaceDefinition top)
+    {
+        bool isNumber = top.type == FaceType.Number;
+        foreach (FaceDefinition f in die.GetCurrentFaces())
+        {
+            if (f == null || (f.type == FaceType.Number) != isNumber) continue;
+            bool better = isNumber ? f.number > top.number : OpRank(f.op) > OpRank(top.op);
+            if (better) return false;
+        }
+        return true;
+    }
+
+    private static int OpRank(Operator op)
+    {
+        switch (op)
+        {
+            case Operator.Multiply: return 3;
+            case Operator.Add: return 2;
+            case Operator.Subtract: return 1;
+            default: return 0;   // ÷ and %
+        }
+    }
+
+    private static string Describe(FaceDefinition face)
+    {
+        return face.type == FaceType.Number ? face.number.ToString() : GameController.OpSymbol(face.op);
+    }
+
+    // ---------- Settling ----------
+
+    private IEnumerator WaitForSettle()
+    {
+        ToggleInputs(false);
+        yield return new WaitForSeconds(0.3f);   // give it time to actually start falling
+        yield return SettleFlat();
+
+        hasLanded = true;
+        if (ThrowAttempts <= 0 || !playerControlled)
+        {
+            owner.MoveDiceToSlot(die);
+        }
+        else
+        {
+            rb.isKinematic = true;
+            ToggleInputs(true);
+            Tutorial.Hint("lock", "RIGHT CLICK TO LOCK IT IN · OR DRAG TO THROW AGAIN");
+        }
+    }
+
+    private IEnumerator WaitForSpawnSettle()
+    {
+        yield return new WaitForSeconds(0.3f);
+        yield return SettleFlat();
+        rb.isKinematic = true;
+        ToggleInputs(true);
+    }
+
+    // Waits until the die is still AND flat. A die that stops tilted (leaning on another die or the rail)
+    // used to get kicked into the air, which often changed its face. Now it's lifted a little, turned so the
+    // face that was most "up" is exactly up, and dropped again. Same face, no flip.
+    private IEnumerator SettleFlat()
+    {
+        int tries = 0;
+        while (true)
+        {
+            while (respawning != null
+                   || rb.linearVelocity.sqrMagnitude > 0.01f
+                   || rb.angularVelocity.sqrMagnitude > 0.01f)
+            {
+                yield return null;
+            }
+
+            if (die.IsFlat(flatThreshold)) yield break;
+
+            if (++tries > 3)   // wedged somewhere weird: start over from the spawn point
+            {
+                tries = 0;
+                Respawn();
+            }
+            else
+            {
+                yield return Straighten();
+            }
+            yield return new WaitForSeconds(0.35f);   // let it land before checking again
+        }
+    }
+
+    private IEnumerator Straighten()
+    {
+        rb.isKinematic = true;
+
+        Transform top = die.GetTopSocket();
+        Quaternion fromRot = transform.rotation;
+        Quaternion toRot = Quaternion.FromToRotation(top.up, Vector3.up) * fromRot;
+        Vector3 fromPos = transform.position;
+        Vector3 toPos = fromPos + Vector3.up * straightenLift;
+
+        for (float t = 0f; t < straightenTime; t += Time.deltaTime)
+        {
+            float k = Mathf.SmoothStep(0f, 1f, t / straightenTime);
+            transform.SetPositionAndRotation(Vector3.Lerp(fromPos, toPos, k), Quaternion.Slerp(fromRot, toRot, k));
+            yield return null;
+        }
+        transform.SetPositionAndRotation(toPos, toRot);
+
+        rb.isKinematic = false;
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+    }
+
+    // ---------- Respawn ----------
 
     public void Respawn()
     {
@@ -182,147 +351,69 @@ public class DiceController : MonoBehaviour
 
     private IEnumerator RespawnDice(float moveTime)
     {
-        yield return new WaitForSeconds(moveTime);
-
+        isDragging = false;
         rb.linearVelocity = Vector3.zero;
-        rb.angularVelocity = Vector3.zero;
-        rb.isKinematic = true;
-
         Vector3 startPos = transform.position;
         Vector3 targetPos = respawnPoint.position;
-        float elapsed = 0f;
 
-        while (elapsed < moveTime)
+        for (float t = 0f; t < moveTime; t += Time.deltaTime)
         {
-            elapsed += Time.deltaTime;
-            float t = Mathf.SmoothStep(0f, 1f, elapsed / moveTime);
-            transform.position = Vector3.Lerp(startPos, targetPos, t);
+            transform.position = Vector3.Lerp(startPos, targetPos, Mathf.SmoothStep(0f, 1f, t / moveTime));
             yield return null;
         }
-
         transform.position = targetPos;
-        rb.isKinematic = false;
-        respawning = null;
+        rb.useGravity = true;
+        respawning = null;       // the old version never cleared this, so a die that fell off the table never settled again
     }
 
-    public int GetThrowAttempts() { return ThrowAttempts; }
-
-    public void SetThrowAttempts(int throwAttempts) { ThrowAttempts = throwAttempts; }
-
-    private void CheckThrowAttempts()
-    {
-        StartCoroutine(WaitForSettle());
-    }
+    // ---------- Lock in ----------
 
     private void MoveDiceToSlot(InputAction.CallbackContext context)
     {
         if (!IsMouseOverMe()) return;
         if (!owner.HasSlotFor(die) && ThrowAttempts > 0 && owner.CouldFitLater(die))
         {
-            if (wobbleRoutine == null) wobbleRoutine = StartCoroutine(Wobble());
-            Tutorial.Hint("wobble", "NO SLOT FOR THAT FACE · THROW IT AGAIN");
-            return;           
+            StartWobble();
+            Tutorial.Hint("noslot", "NO SLOT FOR THAT FACE · THROW IT AGAIN");
+            return;
         }
-        else
-        {
-            owner.MoveDiceToSlot(die);
-            ToggleInputs(false);
-        }
+
+        owner.MoveDiceToSlot(die);
+        ToggleInputs(false);
+        Tutorial.Done("lock");
+    }
+
+    private void StartWobble()
+    {
+        if (wobbleRoutine != null) StopCoroutine(wobbleRoutine);
+        else wobbleBase = transform.rotation;   // only remember the rotation when it isn't mid-wobble
+        wobbleRoutine = StartCoroutine(Wobble());
+    }
+
+    private void StopWobble()
+    {
+        if (wobbleRoutine == null) return;
+        StopCoroutine(wobbleRoutine);
+        wobbleRoutine = null;
+        transform.rotation = wobbleBase;
     }
 
     private IEnumerator Wobble()
     {
-        Quaternion startRot = transform.rotation;
-        float elapsed = 0f;
-        float wobbleTime = 0.2f;
-        float wobbleAngle = 15f;
-        while (elapsed < wobbleTime)
+        const float wobbleTime = 0.2f;
+        const float wobbleAngle = 15f;
+        for (float t = 0f; t < wobbleTime; t += Time.deltaTime)
         {
-            elapsed += Time.deltaTime;
-            float t = elapsed / wobbleTime;
-            t = Mathf.Sin(t * Mathf.PI * 4f) * (1f - t); // oscillate and fade out
-            transform.rotation = startRot * Quaternion.Euler(0f, 0f, wobbleAngle * t);
+            float k = t / wobbleTime;
+            float angle = wobbleAngle * Mathf.Sin(k * Mathf.PI * 4f) * (1f - k);   // oscillate and fade out
+            transform.rotation = wobbleBase * Quaternion.Euler(0f, 0f, angle);
             yield return null;
         }
-        transform.rotation = startRot; // reset to original rotation
+        transform.rotation = wobbleBase;
         wobbleRoutine = null;
     }
 
-    private bool IsMouseOverMe()
-    {
-        Ray ray = GetMouseRay();
-
-        return Physics.Raycast(ray, out RaycastHit hit) && hit.transform == transform;
-    }
-
-    private IEnumerator WaitForSettle()
-    {
-        ToggleInputs(false);
-        yield return new WaitForSeconds(0.3f); // give it time to actually start falling
-
-        int nudges = 0;
-        while (true)
-        {
-            while (respawning != null
-                   || rb.linearVelocity.sqrMagnitude > 0.01f
-                   || rb.angularVelocity.sqrMagnitude > 0.01f)
-            {
-                yield return null;
-            }
-
-            if (die.IsFlat(0.95f)) break;
-
-            rb.AddForce(Vector3.up * 2f, ForceMode.Impulse);
-            rb.AddTorque(Random.onUnitSphere * 1.5f, ForceMode.Impulse);
-            nudges++;
-
-            if (nudges == 5)
-            {
-                Respawn();
-                nudges = 0;
-            }
-            yield return new WaitForSeconds(0.3f); // Make sure it's flat
-        }
-        die.LogTopFace();
-        if (ThrowAttempts <= 0 || !playerControlled) owner.MoveDiceToSlot(die);
-        else
-        {
-            ToggleInputs(true);
-            rb.isKinematic = true;
-            if (playerControlled) Tutorial.Hint("lock", "RIGHT CLICK TO LOCK IT IN · OR DRAG TO THROW AGAIN");
-        }
-    }
-    private IEnumerator WaitForSpawnSettle()
-    {
-        yield return new WaitForSeconds(0.3f); // give it time to actually start falling
-
-        int nudges = 0;
-        while (true)
-        {
-            while (respawning != null
-                   || rb.linearVelocity.sqrMagnitude > 0.01f
-                   || rb.angularVelocity.sqrMagnitude > 0.01f)
-            {
-                yield return null;
-            }
-
-            if (die.IsFlat(0.95f)) break;
-
-            rb.AddForce(Vector3.up * 3f, ForceMode.Impulse);
-            rb.AddTorque(Random.onUnitSphere * 2f, ForceMode.Impulse);
-            nudges++;
-
-            if (nudges == 5)
-            {
-                Respawn();
-                nudges = 0;
-            }
-            yield return new WaitForSeconds(0.3f); // Make sure it's flat
-        }
-
-        rb.isKinematic = true;
-        ToggleInputs(true);
-    }
+    // ---------- Spin while dragging ----------
 
     private void PlayDiceRotation(float timeBetween)
     {
@@ -340,17 +431,22 @@ public class DiceController : MonoBehaviour
             while (elapsed < timeBetween && isDragging)
             {
                 elapsed += Time.deltaTime;
-                float t = elapsed / timeBetween;
-                t = Mathf.SmoothStep(0f, 1f, t);
+                float t = Mathf.SmoothStep(0f, 1f, elapsed / timeBetween);
                 spinDirection = Vector3.Slerp(from, to, t);
                 yield return null;
             }
         }
     }
 
+    // ---------- Called by DiceSide / EnemyController ----------
+
+    public int GetThrowAttempts() { return ThrowAttempts; }
+
+    public void SetThrowAttempts(int throwAttempts) { ThrowAttempts = throwAttempts; }
+
     public void Throw(Vector3 force, Vector3 torque)
     {
-        StopCoroutine(spawnSettle);
+        if (spawnSettle != null) StopCoroutine(spawnSettle);
         rb.isKinematic = false;
         rb.useGravity = true;
 
@@ -358,22 +454,32 @@ public class DiceController : MonoBehaviour
         rb.AddTorque(torque, ForceMode.Impulse);
 
         ThrowAttempts--;
-
         StartCoroutine(WaitForSettle());
+    }
+
+    public void ResetForNewRound()
+    {
+        StopAllCoroutines();   // nothing from last round keeps running
+        respawning = null;
+        wobbleRoutine = null;
+        rotationRoutine = null;
+        spawnSettle = null;
+        isDragging = false;
+        puttingBack = false;
+        hasLanded = false;
+        confirmUntil = -1f;
+        ToggleInputs(false);
+
+        ThrowAttempts = StartingThrowAttempts;
+        transform.SetPositionAndRotation(respawnPoint.position, Random.rotation);
+        rb.isKinematic = false;
+        rb.useGravity = true;
+        SpawnSettle();
     }
 
     private void SpawnSettle()
     {
         if (spawnSettle != null) StopCoroutine(spawnSettle);
         spawnSettle = StartCoroutine(WaitForSpawnSettle());
-    }
-
-    public void ResetForNewRound()
-    {
-        transform.position = respawnPoint.position;
-        rb.isKinematic = false;
-        SpawnSettle();
-        ThrowAttempts = StartingThrowAttempts;
-        transform.rotation = Random.rotation;
     }
 }

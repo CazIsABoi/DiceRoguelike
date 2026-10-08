@@ -56,21 +56,22 @@ public class RewardController : MonoBehaviour
 
     [Header("Offers")]
     [SerializeField] private Sprite healIcon;
+    [SerializeField] private Sprite growIcon;             // Reward_Grow
+    private Die switchTo;
     private RewardOffer chosen;
 
     private FaceView chosenFaceView;
 
     private Phase phase = Phase.None;
 
-    // Phase A: choose a face
+    // Phase A: choose a reward
     private List<RewardOffer> offers;
-    private FaceView[] offerViews;
     private FaceDefinition chosenFace;
 
     // Phase B: choose a die
     private Die[] candidates;
 
-    // Phase C: inspect + swap
+    // Phase C: inspect + pick a side
     private Die die;
     private Transform homeParent;
     private Vector3 homePos;
@@ -78,6 +79,7 @@ public class RewardController : MonoBehaviour
     private bool isSnapping;
     private int selectedIndex = -1;
     private bool confirmed;
+    private bool numbersOnly;          // growing: only number sides can be copied
     private Vector2 lastMousePos;
 
     // Hover
@@ -88,60 +90,12 @@ public class RewardController : MonoBehaviour
 
     // ---------- Entry point ----------
 
-    // GameController does: yield return reward.RewardRoutine(player.GetDice(), rewardPool);
-    public IEnumerator FaceRewardRoutine(Die[] playerDice)
-    {
-        // A is done in RewardRoutine, chosenFace is already set
-    
-        // B. Pick which die gets it
-        yield return rig.MoveTo(diceView);
-        ShowChosenFace();
-        candidates = playerDice;
-        die = null;
-        strip.Show("PICK A DIE", promptColor);
-        phase = Phase.ChooseDie;
-        yield return new WaitUntil(() => die != null);
-        phase = Phase.None;
-        ClearHover();
-        ClearChosenFace();
-
-        DiceController controller = die.GetComponent<DiceController>();
-        controller.ToggleInputs(false);
-
-        // C1. Closeup: parent to the inspect point so it follows the camera
-        homeParent = die.transform.parent;
-        homePos = die.transform.position;
-        homeRot = die.transform.rotation;
-        die.transform.SetParent(inspectPoint, true);
-        yield return MoveDieLocal(Vector3.zero);
-
-        // C2. Inspect until the player confirms a side
-        selectedIndex = -1;
-        confirmed = false;
-        lastMousePos = mousePos.action.ReadValue<Vector2>();
-        strip.Show("PICK A SIDE", promptColor);
-        Tutorial.Hint("side", "RIGHT DRAG OR Q/E TO TURN · CLICK A SIDE TWICE TO PICK IT");
-        phase = Phase.Inspect;
-        yield return new WaitUntil(() => confirmed);
-        phase = Phase.None;
-        strip.Clear();                  // clear the strip when done
-
-        // C3. Swap
-        yield return die.SwapFace(selectedIndex, chosenFace);
-        yield return new WaitForSeconds(afterSwapPause);
-
-        // C4. Back to where it was
-        die.transform.SetParent(homeParent, true);
-        yield return MoveDieWorld(homePos, homeRot);
-
-        die = null;
-    }
-
-    public IEnumerator RewardRoutine(PlayerController player, FaceDefinition[] facePool, DieDefinition diePool, int healAmount)
+    // GameController does: yield return reward.RewardRoutine(player, facePool.ToArray(), beaten.unlockFaces, heal);
+    public IEnumerator RewardRoutine(PlayerController player, FaceDefinition[] facePool, FaceDefinition[] newFaces, int healAmount)
     {
         cameraController.LookEnabled = false;
 
-        offers = BuildOffers(player, facePool, diePool, healAmount);
+        offers = BuildOffers(player, facePool, newFaces, healAmount);
         yield return rig.MoveTo(monitorView);
         ShowOffers(true);
         chosen = null;
@@ -163,7 +117,11 @@ public class RewardController : MonoBehaviour
                 yield return new WaitForSeconds(1f);   // let the nixies flicker up
                 break;
 
-            case RewardKind.Die:
+            case RewardKind.Grow:
+                yield return GrowRewardRoutine(player);
+                break;
+
+            case RewardKind.Die:                        // not offered any more (bosses hand their die over), kept just in case
                 player.AddDie(chosen.die);
                 yield return new WaitForSeconds(1f);
                 break;
@@ -171,6 +129,102 @@ public class RewardController : MonoBehaviour
 
         yield return rig.MoveTo(tableView);
         cameraController.LookEnabled = true;
+    }
+
+    // New face: pick a die, pick a side, the new face slams onto it
+    public IEnumerator FaceRewardRoutine(Die[] playerDice)
+    {
+        yield return rig.MoveTo(diceView);
+        ShowChosenFace();
+        yield return PickDie(playerDice, "PICK A DIE");
+        ClearChosenFace();
+
+        yield return PickSide("PICK A SIDE", "RIGHT DRAG OR Q/E TO TURN · CLICK A SIDE TWICE TO PICK IT", false);
+
+        // Swap
+        yield return die.SwapFace(selectedIndex, chosenFace);
+        yield return new WaitForSeconds(afterSwapPause);
+
+        // Back to where it was
+        die.transform.SetParent(homeParent, true);
+        yield return MoveDieWorld(homePos, homeRot);
+
+        die = null;
+    }
+
+    // Grow a die: pick a number die, pick one of its numbers, it comes back one size up with copies of that number
+    public IEnumerator GrowRewardRoutine(PlayerController player)
+    {
+        List<Die> growable = new List<Die>();
+        foreach (Die d in player.GetDice())
+        {
+            if (player.NextShape(d) != null) growable.Add(d);
+        }
+        if (growable.Count == 0) yield break;    // BuildOffers only offers this when something can grow
+
+        yield return rig.MoveTo(diceView);
+        yield return PickDie(growable.ToArray(), "PICK A DIE TO GROW");
+        yield return PickSide("PICK A NUMBER TO COPY", "RIGHT DRAG OR Q/E TO TURN · CLICK A NUMBER TWICE TO COPY IT", true);
+
+        // Back to where it was, then swap it for the bigger one
+        die.transform.SetParent(homeParent, true);
+        yield return MoveDieWorld(homePos, homeRot);
+
+        string newShape = player.NextShape(die).displayName;
+        player.GrowDie(die, selectedIndex);
+        die = null;
+
+        strip.Flash(string.IsNullOrEmpty(newShape) ? "YOUR DIE GREW!" : $"IT GREW INTO A {newShape.ToUpper()}!", promptColor, 2f);
+        yield return new WaitForSeconds(1.5f);   // watch it drop in
+    }
+
+    // ---------- Shared steps ----------
+
+    // B. Click one of these dice. Leaves it in 'die'.
+    private IEnumerator PickDie(Die[] choices, string prompt)
+    {
+        candidates = choices;
+        die = null;
+        strip.Show(prompt, promptColor);
+        phase = Phase.ChooseDie;
+        yield return new WaitUntil(() => die != null);
+        phase = Phase.None;
+        ClearHover();
+    }
+
+    // C. Bring 'die' up close and wait until a side is clicked twice (selectedIndex).
+    //    Clicking another candidate puts this one back and brings that one up.
+    private IEnumerator PickSide(string prompt, string hint, bool onlyNumbers)
+    {
+        numbersOnly = onlyNumbers;
+        while (true)
+        {
+            die.GetComponent<DiceController>().ToggleInputs(false);
+            homeParent = die.transform.parent;
+            homePos = die.transform.position;
+            homeRot = die.transform.rotation;
+            die.transform.SetParent(inspectPoint, true);
+            yield return MoveDieLocal(Vector3.zero);
+
+            selectedIndex = -1;
+            confirmed = false;
+            switchTo = null;
+            lastMousePos = mousePos.action.ReadValue<Vector2>();
+            strip.Show(prompt, promptColor);
+            Tutorial.Hint("side", hint);
+            phase = Phase.Inspect;
+            yield return new WaitUntil(() => confirmed || switchTo != null);
+            phase = Phase.None;
+            ClearHover();
+            if (confirmed) break;
+
+            if (selectedIndex != -1) SetGlow(die.GetFaceView(selectedIndex), 0f);
+            die.transform.SetParent(homeParent, true);
+            yield return MoveDieWorld(homePos, homeRot);
+            die = switchTo;
+        }
+        strip.Clear();
+        Tutorial.Done("side");
     }
 
     // ---------- Input ----------
@@ -204,9 +258,10 @@ public class RewardController : MonoBehaviour
                 }
                 break;
 
-
             case Phase.Inspect:
                 UpdateInspect();
+                Die other = RaycastPlayerDie();
+                UpdateHover(other != null && other != die ? other.transform : null);
                 break;
         }
     }
@@ -244,21 +299,84 @@ public class RewardController : MonoBehaviour
         StartCoroutine(SnapRotate(target));
     }
 
-    // ---------- Phase A: faces ----------
+    // ---------- Phase A: offers ----------
 
-    private FaceDefinition[] PickOffers(FaceDefinition[] pool, int count)
+    private List<RewardOffer> BuildOffers(PlayerController player, FaceDefinition[] facePool, FaceDefinition[] newFaces, int healAmount)
     {
-        List<FaceDefinition> bag = new List<FaceDefinition>(pool);
-        count = Mathf.Min(count, bag.Count);
-        FaceDefinition[] result = new FaceDefinition[count];
+        List<RewardOffer> result = new List<RewardOffer>();
+        List<FaceDefinition> bag = new List<FaceDefinition>(facePool);
 
-        for (int i = 0; i < count; i++)
+        // 1. Two different faces: what this enemy just unlocked comes first, then random ones from the pool
+        List<FaceDefinition> faces = new List<FaceDefinition>();
+        if (newFaces != null)
         {
-            int r = Random.Range(0, bag.Count);
-            result[i] = bag[r];
-            bag.RemoveAt(r);   // no duplicates
+            foreach (FaceDefinition f in newFaces)
+            {
+                if (faces.Count < 2 && !faces.Contains(f) && bag.Remove(f)) faces.Add(f);
+            }
         }
+        while (faces.Count < 2)
+        {
+            FaceDefinition f = TakeRandom(bag, faces);
+            if (f == null) break;   // the pool ran dry
+            faces.Add(f);
+        }
+
+        // 2. The special: a heal when you're at half HP or less, else grow a die,
+        //    else a heal if you're hurt at all, else a third face
+        bool low = player.Health * 2 <= player.MaxHealth;
+        if (low)
+        {
+            result.Add(HealOffer(healAmount));
+        }
+        else if (player.CanGrowAny())
+        {
+            result.Add(new RewardOffer { kind = RewardKind.Grow, icon = growIcon, label = "GROW A DIE" });
+        }
+        else if (player.Health < player.MaxHealth)
+        {
+            result.Add(HealOffer(healAmount));
+        }
+        else
+        {
+            FaceDefinition f = TakeRandom(bag, faces);
+            if (f != null) faces.Add(f);
+        }
+
+        foreach (FaceDefinition f in faces) result.Add(FaceOffer(f));
+
+        // 3. Shuffle, so the special isn't always in the same spot
+        for (int i = 0; i < result.Count; i++)
+        {
+            int j = Random.Range(i, result.Count);
+            RewardOffer temp = result[i];
+            result[i] = result[j];
+            result[j] = temp;
+        }
+
         return result;
+    }
+
+    // A random face from the bag that isn't already offered, or null if there's none left.
+    // The pool holds duplicates (lots of 9s later on); this keeps two identical offers off the screen.
+    private FaceDefinition TakeRandom(List<FaceDefinition> bag, List<FaceDefinition> alreadyOffered)
+    {
+        bag.RemoveAll(f => alreadyOffered.Contains(f));
+        if (bag.Count == 0) return null;
+        int r = Random.Range(0, bag.Count);
+        FaceDefinition face = bag[r];
+        bag.RemoveAt(r);
+        return face;
+    }
+
+    private RewardOffer FaceOffer(FaceDefinition f)
+    {
+        return new RewardOffer { kind = RewardKind.Face, face = f, icon = f.icon, label = "NEW FACE" };
+    }
+
+    private RewardOffer HealOffer(int amount)
+    {
+        return new RewardOffer { kind = RewardKind.Heal, heal = amount, icon = healIcon, label = "+" + amount + " HP" };
     }
 
     private void ShowOffers(bool on)
@@ -288,12 +406,11 @@ public class RewardController : MonoBehaviour
         if (hit.collider != screenCollider) return -1;
 
         Vector2 uv = hit.textureCoord;
-        Debug.Log(uv);                       
-
-        float across = uv.x;                 // 0 at the left edge, 1 at the right (hopefully)
+        float across = uv.x;                 // 0 at the left edge, 1 at the right
         int option = (int)(across * offers.Count);
         return Mathf.Clamp(option, 0, offers.Count - 1);
     }
+
     private void HighlightOffer(int hoveredOption)
     {
         for (int i = 0; i < offerImages.Length; i++)
@@ -303,39 +420,6 @@ public class RewardController : MonoBehaviour
         }
         SetPrompt(promptText, hoveredOption >= 0 ? offers[hoveredOption].label : "PICK A REWARD");
     }
-    private List<RewardOffer> BuildOffers(PlayerController player, FaceDefinition[] facePool, DieDefinition dieDrop, int healAmount)
-    {
-        List<RewardOffer> result = new List<RewardOffer>();
-
-        // 1. Two different faces (your PickOffers already avoids duplicates)
-        foreach (FaceDefinition f in PickOffers(facePool, 2))
-            result.Add(new RewardOffer { kind = RewardKind.Face, face = f, icon = f.icon, label = "NEW FACE" });
-
-        if (dieDrop != null)
-        {
-            result.Add(new RewardOffer { kind = RewardKind.Die, die = dieDrop, icon = dieDrop.icon, label = "NEW " + dieDrop.displayName });
-        }
-        else if (player.Health < player.MaxHealth)
-        {
-            result.Add(new RewardOffer { kind = RewardKind.Heal, heal = healAmount, icon = healIcon, label = "+" + healAmount + " HP" });
-        }
-        else
-        {
-            FaceDefinition f = PickOffers(facePool, 1)[0];
-            result.Add(new RewardOffer { kind = RewardKind.Face, face = f, icon = f.icon, label = "NEW FACE" });
-        }
-
-        // 3. Shuffle, so the special isn't always on the right
-        for (int i = 0; i < result.Count; i++)
-        {
-            int j = Random.Range(i, result.Count);
-            RewardOffer temp = result[i];
-            result[i] = result[j];
-            result[j] = temp;
-        }
-
-        return result;
-    }
 
     // ---------- Phase B: dice ----------
 
@@ -343,7 +427,7 @@ public class RewardController : MonoBehaviour
     {
         if (!MouseRaycast(out RaycastHit hit)) return null;
         Die hitDie = hit.collider.GetComponentInParent<Die>();
-        if (hitDie == null || System.Array.IndexOf(candidates, hitDie) < 0) return null;   // only the player's dice
+        if (hitDie == null || System.Array.IndexOf(candidates, hitDie) < 0) return null;   // only dice you can pick right now
         return hitDie;
     }
 
@@ -353,7 +437,7 @@ public class RewardController : MonoBehaviour
         if (chosenFace.faceView != null) newChosenFace = Instantiate(chosenFace.faceView, chosenFacePoint);
         else
         {
-            newChosenFace = Instantiate(numeralPreview, chosenFacePoint);   // new [SerializeField] FaceView numeralPreview
+            newChosenFace = Instantiate(numeralPreview, chosenFacePoint);
             newChosenFace.SetLabel(chosenFace.type == FaceType.Operator
                 ? GameController.OpSymbol(chosenFace.op) : chosenFace.number.ToString());
         }
@@ -393,9 +477,17 @@ public class RewardController : MonoBehaviour
     private void SelectSide()
     {
         if (!MouseRaycast(out RaycastHit hit)) return;                     // clicked nothing
-        if (hit.collider.GetComponentInParent<Die>() != die) return;       // clicked something else
+        Die clicked = hit.collider.GetComponentInParent<Die>();
+        if (clicked != die)
+        {
+            if (clicked != null && System.Array.IndexOf(candidates, clicked) >= 0) switchTo = clicked;
+            return;
+        }
 
         int index = die.GetSocketFacing(hit.normal);
+        FaceDefinition picked = die.GetCurrentFaces()[index];
+        if (numbersOnly && (picked == null || picked.type != FaceType.Number)) return;   // growing copies numbers only
+
         if (index == selectedIndex)
         {
             confirmed = true;                                              // second click on the same face = yes
@@ -492,7 +584,8 @@ public class RewardController : MonoBehaviour
         die.transform.rotation = target;
         isSnapping = false;
     }
-    public enum RewardKind { Face, Die, Heal }
+
+    public enum RewardKind { Face, Die, Heal, Grow }
 
     public class RewardOffer
     {

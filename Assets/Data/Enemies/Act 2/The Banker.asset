@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
+  m_Name: The Banker
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  displayName: The Banker
+  maxHP: 1500
+  dice:
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
+  - {fileID: 11400000, guid: abc53b7dd462d7044b9d089100d06ab7, type: 2}
+  layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
+  brain: 2
+  throwAttempts: 2
+  blunderChance: 0
+  rethrowBelow: 6
+  minGain: 2
+  voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  portrait: {fileID: 0}
+  portraitTalk: {fileID: 0}
+  intro: The bank never breaks.
+  winLines:
+  - Interest is due.
+  - The vault grows.
+  - Compound losses.
+  loseLines:
+  - A minor withdrawal.
+  - Noted in the ledger.
+  - Hmph. An overdraft.
+  bustLines:
+  - A clerical error.
+  - Audit that roll.
+  defeatLine: Fine. Take the gold.
+  unlockFaces:
+  - {fileID: 11400000, guid: ab304ee57c3df5544b6a152fb5baf412, type: 2}
+  dieDrop: {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}

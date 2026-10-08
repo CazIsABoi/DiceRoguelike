@@ -312,5 +312,14 @@ public abstract class DiceSide : MonoBehaviour
         Health = Mathf.Min(maxHealth, Health + amount);
         OnHealthChanged?.Invoke(Health, maxHealth);
     }
+
+    // Changes max HP but keeps the same share of it (63/100 becomes 630/1000)
+    public void SetMaxHealthKeepRatio(int newMax)
+    {
+        if (newMax == maxHealth) return;
+        Health = Mathf.Max(1, Mathf.RoundToInt((float)Health * newMax / maxHealth));
+        maxHealth = newMax;
+        OnHealthChanged?.Invoke(Health, maxHealth);
+    }
     #endregion
 }

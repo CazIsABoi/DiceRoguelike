@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
+  m_Name: Pip
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  displayName: Pip
+  maxHP: 15
+  dice:
+  - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
+  - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
+  - {fileID: 11400000, guid: b4b43e029f03c974e82994d370f8daa8, type: 2}
+  layout: {fileID: 11400000, guid: 7c23da8478adfaa42a56f331a5c41966, type: 2}
+  brain: 0
+  throwAttempts: 1
+  blunderChance: 0
+  rethrowBelow: 2
+  minGain: 2
+  voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  portrait: {fileID: 0}
+  portraitTalk: {fileID: 0}
+  intro: Hi! First game. Go easy?
+  winLines:
+  - I won? I WON!
+  - Beginner's luck!
+  - Wait, is that good?
+  loseLines:
+  - Oh. Carry the one...
+  - That's fine. Totally fine.
+  - Mom said I'd be good at this.
+  bustLines:
+  - Where does this one go??
+  - That's not a number!
+  defeatLine: Can I keep the dice at least?
+  unlockFaces:
+  - {fileID: 11400000, guid: 314e91faef7426a4bb4886b709de9119, type: 2}
+  dieDrop: {fileID: 0}

@@ -26,10 +26,21 @@ public class Subtitles : MonoBehaviour
         instance.Run(ref instance.dialogueRoutine, instance.dialogueLabel, $"<b>{speaker.ToUpper()}:</b> {line}", line.Length);
     }
 
-    public static void Hint(string message)
+    public static void Hint(string message, bool stay = false)
     {
         if (instance == null) return;
-        instance.Run(ref instance.hintRoutine, instance.hintLabel, message, message.Length + 20);   // hints stay a bit longer
+        if (instance.hintRoutine != null) instance.StopCoroutine(instance.hintRoutine);
+        instance.hintRoutine = null;
+        if (stay) { instance.hintLabel.text = message; instance.hintLabel.alpha = 1f; return; }
+        instance.Run(ref instance.hintRoutine, instance.hintLabel, message, message.Length + 20);
+    }
+
+    public static void ClearHint()
+    {
+        if (instance == null) return;
+        if (instance.hintRoutine != null) instance.StopCoroutine(instance.hintRoutine);
+        instance.hintRoutine = null;
+        instance.hintLabel.text = "";
     }
 
     private void Run(ref Coroutine routine, TMP_Text label, string text, int length)

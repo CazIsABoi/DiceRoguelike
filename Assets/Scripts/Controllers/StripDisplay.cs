@@ -72,7 +72,7 @@ public class StripDisplay : MonoBehaviour
         text.color = color;
     }
 
-    private void StopAll()
+    public void StopAll()
     {
         if (flashRoutine != null) StopCoroutine(flashRoutine);
         flashRoutine = null;
@@ -111,7 +111,7 @@ public class StripDisplay : MonoBehaviour
         scrollLabel.color = color;
         scrollLabel.gameObject.SetActive(true);   // only now, so it never flashes in the middle
 
-        for (int i = 0; i < loops; i++)
+        for (int i = 0; loops < 0 || i < loops; i++)
         {
             float x = area.rect.width;            // start just off the right edge
             while (x > -textWidth)

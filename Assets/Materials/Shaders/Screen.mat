@@ -55,12 +55,12 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
-    - _DotRadius: 0.35
-    - _Intensity: 3
+    - _DotRadius: 0.4
+    - _Intensity: 5
     - _QueueControl: 0
     - _QueueOffset: 0
     m_Colors:
-    - _OffColor: {r: 0.14150935, g: 0.05089108, b: 0, a: 1}
+    - _OffColor: {r: 0.19215687, g: 0.07058824, b: 0, a: 1}
     - _Resolution: {r: 128, g: 80, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

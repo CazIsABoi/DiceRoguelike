@@ -4,7 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
-using UnityEngine.Networking;  
+using UnityEngine.Networking;
 
 public class GameController : MonoBehaviour
 {
@@ -27,7 +27,11 @@ public class GameController : MonoBehaviour
     [Header("Bust")]
     [SerializeField] private int bustBase = 3;
     public int Fight { get; private set; } = 1;
-    public int OperatorBustPenalty => bustBase * Fight;
+    public int OperatorBustPenalty => bustBase * Fight * player.Stake;   // the stake grows with your number dice, like your HP
+
+    [Header("Acts")]
+    [SerializeField] private int[] actStarts = { 1, 9, 17 };   // first fight of each act: 8 + 8 + 5 fights
+    public int Act { get; private set; } = 1;
 
     [Header("Audio")]
     [SerializeField] private AudioClip winClip;
@@ -37,12 +41,13 @@ public class GameController : MonoBehaviour
     [Header("Run")]
     [SerializeField] private EnemyDefinition[] ladder;
     [SerializeField] private float introTime = 2f;
+    [SerializeField] private float actBannerTime = 2.5f;
 
     [Header("Round Flow")]
     [SerializeField] private float timeBetweenRounds = 2f;
     [SerializeField] FaceDefinition[] rewardPool;
     private List<FaceDefinition> facePool;
-    [SerializeField] private int healAmount = 20;
+    [SerializeField, Range(0, 100)] private int healPercent = 40;   // the heal reward gives this much of your max HP
 
     [Header("End Screen")]
     [SerializeField] private GameObject endPanel;
@@ -70,10 +75,10 @@ public class GameController : MonoBehaviour
 
     private void Start()
     {
-    #if !UNITY_WEBGL
+#if !UNITY_WEBGL
         QualitySettings.vSyncCount = 0;
         Application.targetFrameRate = 144;
-    #endif
+#endif
         scoreText.text = "0";
         facePool = new List<FaceDefinition>(rewardPool);
         StartCoroutine(BeginFight());
@@ -92,8 +97,16 @@ public class GameController : MonoBehaviour
             StartCoroutine(EndRoundRoutine());
         }
     }
+
     private IEnumerator BeginFight()
     {
+        if (Act < actStarts.Length && Fight == actStarts[Act])   // first fight of a new act
+        {
+            Act++;
+            strip.Flash($"ACT {Act}", Color.yellow, actBannerTime);
+            yield return new WaitForSeconds(actBannerTime);
+        }
+
         EnemyDefinition def = ladder[Fight - 1];   // Fight starts at 1
         enemy.Load(def);
         enemy.SayIntro();
@@ -146,14 +159,24 @@ public class GameController : MonoBehaviour
 
             EnemyDefinition beaten = ladder[Fight - 1];
             facePool.AddRange(beaten.unlockFaces);
-            yield return reward.RewardRoutine(player, facePool.ToArray(), beaten.dieDrop, healAmount);
+
+            if (beaten.dieDrop != null)          // act bosses hand their die over: one more digit, one more zero on your HP
+            {
+                player.AddDie(beaten.dieDrop);
+                player.Heal(player.MaxHealth - player.Health);   // and a full heal for the next act
+                strip.Flash($"NEW DIE · MAX HP {player.MaxHealth}", Color.yellow, 2.5f);
+                yield return new WaitForSeconds(2.5f);
+            }
+
+            int heal = player.MaxHealth * healPercent / 100;
+            yield return reward.RewardRoutine(player, facePool.ToArray(), beaten.unlockFaces, heal);
             Fight++;
 
             player.ResetRound();
             playerResult = null;
             enemyResult = null;
             roundEnding = false;
-            yield return BeginFight();   // next enemy, intro, then it throws
+            yield return BeginFight();   // next enemy (or a new act), intro, then it throws
             yield break;
         }
 
@@ -164,12 +187,13 @@ public class GameController : MonoBehaviour
         roundEnding = false;
         enemy.StartTurn();
     }
+
     private IEnumerator EndRun(bool won)
     {
         equationPanel.SetActive(false);
         endPanel.SetActive(true);
         endStats.text = won ? $"ALL {ladder.Length} FIGHTS CLEARED"
-                            : $"REACHED FIGHT {Fight} · BEATEN BY {ladder[Fight - 1].displayName.ToUpper()}";
+                            : $"ACT {Act} · FIGHT {Fight} · BEATEN BY {ladder[Fight - 1].displayName.ToUpper()}";
         yield return rig.MoveTo(monitorView);
 
         runWon = won;
@@ -181,9 +205,11 @@ public class GameController : MonoBehaviour
         foreach (Die die in player.GetDice()) die.GetComponent<DiceController>().ToggleInputs(false);
         yield break;   // the buttons take it from here
     }
+
     public void OpenSurvey() => Application.OpenURL(BuildSurveyUrl());
     public void PlayAgain() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     public void ToMenu() => SceneManager.LoadScene("MainMenu");
+
     private string BuildSurveyUrl()
     {
         string beatenBy = runWon ? "Nobody" : ladder[Fight - 1].displayName;
@@ -302,7 +328,8 @@ public class GameController : MonoBehaviour
         }
         else
         {
-            float intensity = Mathf.InverseLerp(0f, maxLog, Mathf.Log10(result + 1));
+            // Measured against the stake, so a 500 hit in act 2 feels like a 50 in act 1 (instead of every act 3 hit maxing out)
+            float intensity = Mathf.InverseLerp(0f, maxLog, Mathf.Log10((result + 1f) / player.Stake));
             flashColor = scoreGradient.Evaluate(intensity);
             shake = intensity > 0.5f ? intensity * maxShake : 0f;
             punchSize = Mathf.Lerp(1.1f, 1.6f, intensity);
