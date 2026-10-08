@@ -54,6 +54,15 @@ public class DiceController : MonoBehaviour
 
     private DiceSide owner;
     private bool playerControlled;
+    private static int rollingPlayerDice;   // how many of the player's dice are in the air right now
+    private bool rolling;
+
+    private void SetRolling(bool on)
+    {
+        if (on == rolling) return;          // never count the same die twice
+        rolling = on;
+        if (playerControlled) rollingPlayerDice += on ? 1 : -1;
+    }
 
     private void Awake()
     {
@@ -75,6 +84,7 @@ public class DiceController : MonoBehaviour
 
     private void OnDisable()
     {
+        SetRolling(false);
         ToggleInputs(false);
     }
 
@@ -180,6 +190,8 @@ public class DiceController : MonoBehaviour
         if (!isDragging) return;
         isDragging = false;
 
+        SetRolling(true);
+        StartCoroutine(WaitForSettle());
         Vector2 moved = mousePos.action.ReadValue<Vector2>() - grabMouse;
         if (moved.magnitude < 5f)   // pixels: a click, not a throw
         {
@@ -266,8 +278,9 @@ public class DiceController : MonoBehaviour
         ToggleInputs(false);
         yield return new WaitForSeconds(0.3f);   // give it time to actually start falling
         yield return SettleFlat();
-
+        SetRolling(false);
         hasLanded = true;
+
         if (ThrowAttempts <= 0 || !playerControlled)
         {
             owner.MoveDiceToSlot(die);
@@ -371,10 +384,10 @@ public class DiceController : MonoBehaviour
     private void MoveDiceToSlot(InputAction.CallbackContext context)
     {
         if (!IsMouseOverMe()) return;
-        if (!owner.HasSlotFor(die) && ThrowAttempts > 0 && owner.CouldFitLater(die))
+        if (rollingPlayerDice > 0)
         {
             StartWobble();
-            Tutorial.Hint("noslot", "NO SLOT FOR THAT FACE · THROW IT AGAIN");
+            Tutorial.Notice("WAIT FOR YOUR DICE TO LAND");
             return;
         }
 
@@ -460,6 +473,7 @@ public class DiceController : MonoBehaviour
     public void ResetForNewRound()
     {
         StopAllCoroutines();   // nothing from last round keeps running
+        SetRolling(false);
         respawning = null;
         wobbleRoutine = null;
         rotationRoutine = null;
