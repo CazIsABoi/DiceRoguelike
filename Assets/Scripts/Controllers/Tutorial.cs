@@ -15,5 +15,6 @@ public class Tutorial : MonoBehaviour
     {
         if (instance == null || !shown.Add(key)) return;   // Add returns false if it was already shown
         instance.strip.ShowScrolling(message, instance.hintColor);
+        Subtitles.Hint(message);
     }
 }

@@ -24,10 +24,22 @@ public class ScreenButtons : MonoBehaviour
     [SerializeField] private Color normalColor = new Color(1f, 1f, 1f, 0.6f);
     [SerializeField] private Color hoverColor = Color.white;
 
-    private void OnEnable() { click.action.Enable(); mousePos.action.Enable(); }
+    private void OnEnable()
+    {
+        click.action.Enable();
+        mousePos.action.Enable();
+    }
 
     private void Update()
     {
+        if (click.action.WasPressedThisFrame())
+        {
+            Vector2 m = mousePos.action.ReadValue<Vector2>();
+            bool didHit = Physics.Raycast(cam.ScreenPointToRay(m), out RaycastHit h);
+            Debug.Log($"[Screen] mouse {m}  screen {Screen.width}x{Screen.height}  " +
+                      $"hit {(didHit ? h.collider.name : "nothing")}  uv {(didHit ? h.textureCoord : Vector2.zero)}");
+        }
+
         bool onScreen = TryGetCanvasPoint(out Vector3 world);
 
         foreach (ScreenButton b in buttons)

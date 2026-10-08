@@ -15,6 +15,7 @@ public class DialogueDisplay : MonoBehaviour
     [SerializeField] private Image portrait;
     private Sprite idleSprite;
     private Sprite talkSprite;
+    private string speakerName;
 
     private readonly Queue<string> pages = new Queue<string>();
     private Coroutine playRoutine;
@@ -26,6 +27,7 @@ public class DialogueDisplay : MonoBehaviour
     {
         if (string.IsNullOrEmpty(line)) return;
         foreach (string page in line.Split('|')) pages.Enqueue(page);
+        Subtitles.Dialogue(speakerName, line);
         if (playRoutine == null) playRoutine = StartCoroutine(Play());
     }
 
@@ -70,7 +72,10 @@ public class DialogueDisplay : MonoBehaviour
     }
     public void SetSpeaker(string speakerName, Sprite idle, Sprite talk, AudioClip voiceClip)
     {
-        if (nameLabel != null) nameLabel.text = speakerName.ToUpper();
+        if (nameLabel != null) {
+            nameLabel.text = speakerName.ToUpper();
+        }
+        this.speakerName = speakerName;
         idleSprite = idle;
         talkSprite = talk != null ? talk : idle;   // no talk frame = just don't animate
         portrait.sprite = idleSprite;
