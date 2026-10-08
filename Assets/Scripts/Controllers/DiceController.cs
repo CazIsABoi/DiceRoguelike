@@ -36,6 +36,7 @@ public class DiceController : MonoBehaviour
     private int StartingThrowAttempts;
     private Coroutine spawnSettle;
     private Coroutine wobbleRoutine;
+    private Coroutine settleRoutine;
     private Quaternion wobbleBase;
 
     private Camera cam;
@@ -190,8 +191,6 @@ public class DiceController : MonoBehaviour
         if (!isDragging) return;
         isDragging = false;
 
-        SetRolling(true);
-        StartCoroutine(WaitForSettle());
         Vector2 moved = mousePos.action.ReadValue<Vector2>() - grabMouse;
         if (moved.magnitude < 5f)   // pixels: a click, not a throw
         {
@@ -206,9 +205,11 @@ public class DiceController : MonoBehaviour
 
         ThrowAttempts--;
         Tutorial.Done("throw");
-        Tutorial.Done("lock");     // the hint says "lock it in OR throw again", so throwing again counts too
+        Tutorial.Done("lock");
         Tutorial.Done("noslot");
-        StartCoroutine(WaitForSettle());
+
+        SetRolling(true);
+        StartSettle();
     }
 
     private IEnumerator PutBack()
@@ -279,6 +280,7 @@ public class DiceController : MonoBehaviour
         yield return new WaitForSeconds(0.3f);   // give it time to actually start falling
         yield return SettleFlat();
         SetRolling(false);
+        settleRoutine = null;
         hasLanded = true;
 
         if (ThrowAttempts <= 0 || !playerControlled)
@@ -299,6 +301,11 @@ public class DiceController : MonoBehaviour
         yield return SettleFlat();
         rb.isKinematic = true;
         ToggleInputs(true);
+    }
+    private void StartSettle()
+    {
+        if (settleRoutine != null) StopCoroutine(settleRoutine);
+        settleRoutine = StartCoroutine(WaitForSettle());
     }
 
     // Waits until the die is still AND flat. A die that stops tilted (leaning on another die or the rail)

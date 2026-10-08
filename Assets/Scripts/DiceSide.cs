@@ -115,9 +115,18 @@ public abstract class DiceSide : MonoBehaviour
 
     public virtual void MoveDiceToSlot(Die die)
     {
+        if (IsAccountedFor(die)) return;   // a die can only be locked in or busted once per round
         DiceSlot slot = ChooseSlot(die);
         if (slot == null) { Bust(die); return; }
         PlaceInSlot(die, slot);
+    }
+
+    private bool IsAccountedFor(Die die)
+    {
+        if (bustedDice.Contains(die)) return true;
+        foreach (DiceSlot slot in diceSlots)
+            if (!slot.IsEmpty && slot.CurrentDie == die) return true;
+        return false;
     }
     protected virtual DiceSlot ChooseSlot(Die die)
     {
@@ -203,12 +212,20 @@ public abstract class DiceSide : MonoBehaviour
         {
             if (diceSlots[i].IsEmpty)
             {
-                faces.Add(diceSlots[i].AcceptableFace == FaceType.Number ? numberFiller : operatorFiller);  
-                continue;
+                if (diceSlots[i].AcceptableFace == FaceType.Operator) faces.Add(operatorFiller);
+                continue;   // empty number slots add no digit, so a busted 7_ stays 7 instead of 70
             }
             faces.Add(diceSlots[i].CurrentDie.GetTopFace());
         }
         return GameController.Evaluate(faces) - BustPenalty();
+    }
+    private bool GroupHasDigit(int index)
+    {
+        for (int i = index; i >= 0 && diceSlots[i].AcceptableFace == FaceType.Number; i--)
+            if (!diceSlots[i].IsEmpty) return true;
+        for (int i = index + 1; i < diceSlots.Count && diceSlots[i].AcceptableFace == FaceType.Number; i++)
+            if (!diceSlots[i].IsEmpty) return true;
+        return false;
     }
 
     protected string BuildEquation()
@@ -219,7 +236,13 @@ public abstract class DiceSide : MonoBehaviour
             if (diceSlots[i].IsEmpty)
             {
                 bool filled = bustedDice.Count > 0;   // after a bust, empty slots get their filler
-                if (diceSlots[i].AcceptableFace == FaceType.Number) text += filled ? "0" : "_";
+                if (diceSlots[i].AcceptableFace == FaceType.Number)
+                {
+                    bool firstOfGroup = i == 0 || diceSlots[i - 1].AcceptableFace != FaceType.Number;
+                    if (!filled) text += "_";
+                    else if (!GroupHasDigit(i) && firstOfGroup) text += "0";   // a fully empty number shows as one 0
+                                                                               // otherwise show nothing: the digits that are there are the whole number
+                }
                 else text += filled ? GameController.OpSymbol(operatorFiller.op) : "?";
                 continue;
             }

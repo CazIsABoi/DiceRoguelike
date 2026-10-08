@@ -249,25 +249,38 @@ public class GameController : MonoBehaviour
 
     public static int Evaluate(List<FaceDefinition> faces)
     {
-        int total = 0;
-        int currentNumber = 0;
-        Operator pendingOp = Operator.Add;
-
+        // Pass 1: split into numbers and operators (digits still concatenate)
+        List<int> nums = new List<int>();
+        List<Operator> ops = new List<Operator>();
+        int current = 0;
         foreach (FaceDefinition face in faces)
         {
-            if (face.type == FaceType.Number)
+            if (face.type == FaceType.Number) current = current * 10 + face.number;
+            else { nums.Add(current); ops.Add(face.op); current = 0; }
+        }
+        nums.Add(current);
+
+        // Pass 2: fold × ÷ % into their left neighbour
+        List<int> terms = new List<int> { nums[0] };
+        List<Operator> addOps = new List<Operator>();
+        for (int i = 0; i < ops.Count; i++)
+        {
+            if (ops[i] == Operator.Add || ops[i] == Operator.Subtract)
             {
-                currentNumber = (currentNumber * 10) + face.number;
+                addOps.Add(ops[i]);
+                terms.Add(nums[i + 1]);
             }
             else
             {
-                total = Apply(pendingOp, total, currentNumber);
-                pendingOp = face.op;
-                currentNumber = 0;
+                int last = terms.Count - 1;
+                terms[last] = Apply(ops[i], terms[last], nums[i + 1]);
             }
         }
 
-        total = Apply(pendingOp, total, currentNumber);
+        // Pass 3: + and - left to right
+        int total = terms[0];
+        for (int i = 0; i < addOps.Count; i++)
+            total = Apply(addOps[i], total, terms[i + 1]);
         return total;
     }
 
