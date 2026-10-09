@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: Bones
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Bones
-  maxHP: 1000
+  maxHP: 100
   dice:
   - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
   - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
   - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
-  - {fileID: 11400000, guid: 1a54226f810f47f489a70ce557846960, type: 2}
+  - {fileID: 11400000, guid: fcb716d0f675a204c980691f47e48693, type: 2}
   layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
   brain: 2
   throwAttempts: 2
@@ -26,6 +26,8 @@ MonoBehaviour:
   rethrowBelow: 2
   minGain: 2
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  table: 1
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Bones. Real bone. Old school.

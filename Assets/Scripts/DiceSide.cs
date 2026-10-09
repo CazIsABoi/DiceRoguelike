@@ -9,6 +9,8 @@ public abstract class DiceSide : MonoBehaviour
     [Header("References")]
     [SerializeField] private GameController gameController;
     [SerializeField] private AudioSource audio;
+    protected GameController Game => gameController;
+    public TableType Table => gameController != null ? gameController.Table : TableType.High;
 
     [Header("Health")]
     [SerializeField] protected int maxHealth = 100;
@@ -43,6 +45,34 @@ public abstract class DiceSide : MonoBehaviour
 
     [Header("UI")]
     [SerializeField] private AudioClip equationSFX;
+
+    [Header("Total")]
+    // New names on purpose, so the old Inspector values (60% size, 35% see-through) don't carry over:
+    // a dot/pixel font breaks apart when it's scaled down or faded, so the total is full size and only dimmed a little.
+    [SerializeField, Range(0f, 1f)] private float totalOpacity = 0.55f;    // "= 437"
+    [SerializeField, Range(0f, 1f)] private float accentOpacity = 1f;      // "12 OFF", the number that decides a Low or Target round
+    [SerializeField, Range(20, 100)] private int totalSize = 100;          // percent of the equation's size. Keep 100 with a pixel font
+    [SerializeField] private bool totalBelow = false;                      // put the total on its own line under the equation (for a narrow screen)
+    [SerializeField] private bool centerWithTotal = false;                 // an invisible copy on the left keeps the equation centred, but doubles the line width
+    private string totalText = "";
+    private string totalAccent = "";
+    private const string NoBreakSpace = "\u00A0";
+
+    [Header("Dice Sounds")]
+    [SerializeField] private AudioClip[] diceHitClips;   // clacks when a die hits the felt, the rail or another die (a random one each time)
+    [SerializeField] private AudioClip diceGrabClip;     // optional
+    [SerializeField] private AudioClip[] diceShakeClips; // rattles while you hold a die, louder the faster you move it (one after another, random order)
+    public AudioClip[] DiceHitClips => diceHitClips;
+    public AudioClip DiceGrabClip => diceGrabClip;
+    public AudioClip[] DiceShakeClips => diceShakeClips;
+    public bool HasDiceSounds => (diceHitClips != null && diceHitClips.Length > 0) || diceGrabClip != null || (diceShakeClips != null && diceShakeClips.Length > 0);
+
+    // While this is true the player's dice can't be grabbed or locked in (the table intro and the spare swap)
+    public bool InputBlocked { get; set; }
+
+    // Rabbit's Foot: PlayerController overrides these. Enemies never get a bonus rethrow.
+    public virtual bool HasBonusRethrow => false;
+    public virtual void SpendBonusRethrow() { }
 
     // ---------- Dice ----------
 
@@ -89,7 +119,7 @@ public abstract class DiceSide : MonoBehaviour
 
         diceInSlots = 0;
         bustedDice.Clear();
-        equationText.text = BuildEquation();
+        RefreshEquation(true);
     }
 
     // ---------- Slots ----------
@@ -115,18 +145,9 @@ public abstract class DiceSide : MonoBehaviour
 
     public virtual void MoveDiceToSlot(Die die)
     {
-        if (IsAccountedFor(die)) return;   // a die can only be locked in or busted once per round
         DiceSlot slot = ChooseSlot(die);
         if (slot == null) { Bust(die); return; }
         PlaceInSlot(die, slot);
-    }
-
-    private bool IsAccountedFor(Die die)
-    {
-        if (bustedDice.Contains(die)) return true;
-        foreach (DiceSlot slot in diceSlots)
-            if (!slot.IsEmpty && slot.CurrentDie == die) return true;
-        return false;
     }
     protected virtual DiceSlot ChooseSlot(Die die)
     {
@@ -173,7 +194,7 @@ public abstract class DiceSide : MonoBehaviour
         dice.rotation = targetRot;
 
         diceInSlots++;
-        equationText.text = BuildEquation();
+        RefreshEquation(true);
 
         CheckComplete();
     }
@@ -205,6 +226,8 @@ public abstract class DiceSide : MonoBehaviour
 
     // ---------- Equation ----------
 
+    // The plain result of what's in the slots. Busts are kept apart (BustPenalty), because a Low or
+    // Target table adds them to your distance instead of taking them off your result.
     private int EvaluateSlots()
     {
         List<FaceDefinition> faces = new List<FaceDefinition>();
@@ -212,23 +235,15 @@ public abstract class DiceSide : MonoBehaviour
         {
             if (diceSlots[i].IsEmpty)
             {
-                if (diceSlots[i].AcceptableFace == FaceType.Operator) faces.Add(operatorFiller);
-                continue;   // empty number slots add no digit, so a busted 7_ stays 7 instead of 70
+                faces.Add(diceSlots[i].AcceptableFace == FaceType.Number ? numberFiller : operatorFiller);
+                continue;
             }
             faces.Add(diceSlots[i].CurrentDie.GetTopFace());
         }
-        return GameController.Evaluate(faces) - BustPenalty();
-    }
-    private bool GroupHasDigit(int index)
-    {
-        for (int i = index; i >= 0 && diceSlots[i].AcceptableFace == FaceType.Number; i--)
-            if (!diceSlots[i].IsEmpty) return true;
-        for (int i = index + 1; i < diceSlots.Count && diceSlots[i].AcceptableFace == FaceType.Number; i++)
-            if (!diceSlots[i].IsEmpty) return true;
-        return false;
+        return GameController.Evaluate(faces);
     }
 
-    protected string BuildEquation()
+    protected string BuildEquation(bool playSound = true)
     {
         string text = "";
         for (int i = 0; i < diceSlots.Count; i++)
@@ -236,13 +251,7 @@ public abstract class DiceSide : MonoBehaviour
             if (diceSlots[i].IsEmpty)
             {
                 bool filled = bustedDice.Count > 0;   // after a bust, empty slots get their filler
-                if (diceSlots[i].AcceptableFace == FaceType.Number)
-                {
-                    bool firstOfGroup = i == 0 || diceSlots[i - 1].AcceptableFace != FaceType.Number;
-                    if (!filled) text += "_";
-                    else if (!GroupHasDigit(i) && firstOfGroup) text += "0";   // a fully empty number shows as one 0
-                                                                               // otherwise show nothing: the digits that are there are the whole number
-                }
+                if (diceSlots[i].AcceptableFace == FaceType.Number) text += filled ? "0" : "_";
                 else text += filled ? GameController.OpSymbol(operatorFiller.op) : "?";
                 continue;
             }
@@ -257,11 +266,57 @@ public abstract class DiceSide : MonoBehaviour
                 text += GameController.OpSymbol(face.op);
             }
         }
-        audio.pitch = Random.Range(.5f, 1.5f);
-        audio.PlayOneShot(equationSFX);
-        audio.pitch = 1f;
-        if (bustedDice.Count > 0) text += " - " + BustPenalty();
+        if (playSound)
+        {
+            audio.pitch = Random.Range(.5f, 1.5f);
+            audio.PlayOneShot(equationSFX);
+            audio.pitch = 1f;
+        }
+        if (bustedDice.Count > 0) text += gameController.BustText(BustPenalty());
         return text;
+    }
+
+    // Rebuilds the equation text, with the last total (if there is one) small and faint on the right.
+    // At Low and Target tables the distance ("12 OFF") is brighter than the rest, because that's the number that wins.
+    protected void RefreshEquation(bool playSound)
+    {
+        string equation = BuildEquation(playSound);
+        if (string.IsNullOrEmpty(totalText))
+        {
+            equationText.text = equation;
+            return;
+        }
+
+        string faint = Mathf.RoundToInt(totalOpacity * 255f).ToString("X2");
+        string strong = Mathf.RoundToInt(accentOpacity * 255f).ToString("X2");
+        string gap = totalBelow ? "\n" : NoBreakSpace + NoBreakSpace;
+        string plain = NoBreak(totalText) + (string.IsNullOrEmpty(totalAccent) ? "" : $"{NoBreakSpace}·{NoBreakSpace}{NoBreak(totalAccent)}");
+        string shown = string.IsNullOrEmpty(totalAccent)
+            ? NoBreak(totalText)
+            : $"{NoBreak(totalText)}{NoBreakSpace}·{NoBreakSpace}<alpha=#{strong}>{NoBreak(totalAccent)}";
+
+        string total = $"<size={totalSize}%>{gap}<alpha=#{faint}>{shown}</size>";
+        string balance = centerWithTotal && !totalBelow ? $"<alpha=#00><size={totalSize}%>{plain}{gap}</size>" : "";
+        equationText.text = $"{balance}<alpha=#FF>{equation}{total}";
+    }
+
+    // No-break spaces: the total never wraps onto its own line
+    private static string NoBreak(string text) => text.Replace(" ", NoBreakSpace);
+
+    // GameController calls this when this side's equation is done: ShowTotal("= 437") or ShowTotal("= 437", "12 OFF").
+    // It stays through the round reset until the next equation is done, like the score.
+    public void ShowTotal(string text, string accent = "")
+    {
+        totalText = text;
+        totalAccent = accent ?? "";
+        RefreshEquation(false);
+    }
+
+    public void ClearTotal()
+    {
+        totalText = "";
+        totalAccent = "";
+        if (diceSlots.Count > 0) RefreshEquation(false);
     }
 
     private void PunchEquation(float scale, float duration)
@@ -286,8 +341,10 @@ public abstract class DiceSide : MonoBehaviour
     {
         if (bustedDice.Contains(die)) return;
         bustedDice.Add(die);
+        Rigidbody body = die.GetComponent<Rigidbody>();
+        if (body != null) body.isKinematic = true;   // it stays where it landed; with physics on, the reward screen could drop it
         OnBusted(die);
-        equationText.text = BuildEquation();
+        RefreshEquation(true);
         CheckComplete();
     }
 
@@ -297,7 +354,7 @@ public abstract class DiceSide : MonoBehaviour
     {
         if (diceInSlots + bustedDice.Count == spawnedDice.Length)
         {
-            gameController.OnEquationComplete(this, EvaluateSlots());
+            gameController.OnEquationComplete(this, EvaluateSlots(), BustPenalty());
         }
         else PunchEquation(1.15f, 0.2f);
     }

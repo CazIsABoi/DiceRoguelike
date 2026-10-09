@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Sticky FIngers
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Sticky Fingers
-  maxHP: 1300
+  maxHP: 2000
   dice:
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
@@ -26,6 +26,8 @@ MonoBehaviour:
   rethrowBelow: 5
   minGain: 2
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Nice dice. Mine now.

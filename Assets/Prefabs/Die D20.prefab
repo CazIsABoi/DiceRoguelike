@@ -403,8 +403,8 @@ Rigidbody:
   m_GameObject: {fileID: 4435677099945731932}
   serializedVersion: 5
   m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
+  m_LinearDamping: 0.1
+  m_AngularDamping: 0.5
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -420,7 +420,7 @@ Rigidbody:
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 0
-  m_CollisionDetection: 0
+  m_CollisionDetection: 2
 --- !u!64 &2092714627537836410
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -460,10 +460,25 @@ MonoBehaviour:
   mousePos: {fileID: 1671029056690863057, guid: 0125415ae5945e04d9bd22af7861c4a7, type: 3}
   liftHeight: 3
   followSpeed: 15
-  spinStrength: 15
-  maxSpeed: 30
+  holdSpin: 3
+  leanSpin: 1
+  throwStrength: 1
+  maxThrowSpeed: 8
+  throwArc: 1.5
+  rollSpin: 2.5
+  randomSpin: 4
+  flickWindow: 0.08
+  freeRollTime: 0.8
+  settleDamping: 5
+  settleRampTime: 0.7
+  confirmBestFace: 1
+  confirmWindow: 2.5
+  flatThreshold: 0.95
+  straightenLift: 0.2
+  straightenTime: 0.15
   ThrowAttempts: 2
   killHeight: -1
+  respawnPopTime: 0.2
 --- !u!114 &4062360055529501214
 MonoBehaviour:
   m_ObjectHideFlags: 0

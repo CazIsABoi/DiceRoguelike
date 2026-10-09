@@ -23,6 +23,10 @@ public class EnemyDefinition : ScriptableObject
     public float minGain = 2f;                         // Calculating: how sure it must be before risking a rethrow
     public AudioClip voice;
 
+    [Header("Table")]
+    public TableType table = TableType.High;
+    public Vector2Int targetRange = new Vector2Int(10, 40);   // Target tables only, both ends included
+
     [Header("Portrait")]
     public Sprite portrait;        // idle
     public Sprite portraitTalk;    // mouth open 

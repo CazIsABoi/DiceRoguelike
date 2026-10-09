@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: The House
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: The House
-  maxHP: 12000
+  maxHP: 10500
   dice:
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
@@ -22,11 +22,13 @@ MonoBehaviour:
   - {fileID: 11400000, guid: dd850c493094bb9428f807fed21cde5f, type: 2}
   layout: {fileID: 11400000, guid: fde4265c052323147bc92dc480ce3f1a, type: 2}
   brain: 2
-  throwAttempts: 3
+  throwAttempts: 2
   blunderChance: 0
   rethrowBelow: 5
-  minGain: 200
+  minGain: 300
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  table: 2
+  targetRange: {x: 500, y: 6000}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: The House always wins.

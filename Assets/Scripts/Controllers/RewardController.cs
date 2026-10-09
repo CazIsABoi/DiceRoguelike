@@ -57,6 +57,11 @@ public class RewardController : MonoBehaviour
     [Header("Offers")]
     [SerializeField] private Sprite healIcon;
     [SerializeField] private Sprite growIcon;             // Reward_Grow
+    [SerializeField] private Sprite keepIcon;             // "keep your die" on the spare swap screen
+
+    [Header("Relic Reveal")]
+    [SerializeField] private float relicRevealTime = 2.2f;   // the picked relic stays big on the screen this long
+    private string screenPrompt = "PICK A REWARD";        // what the sign says when nothing is hovered
     private Die switchTo;
     private RewardOffer chosen;
 
@@ -90,26 +95,22 @@ public class RewardController : MonoBehaviour
 
     // ---------- Entry point ----------
 
-    // GameController does: yield return reward.RewardRoutine(player, facePool.ToArray(), beaten.unlockFaces, heal);
-    public IEnumerator RewardRoutine(PlayerController player, FaceDefinition[] facePool, FaceDefinition[] newFaces, int healAmount)
+    // GameController does: yield return reward.RewardRoutine(player, facePool.ToArray(), beaten.unlockFaces, heal, relicChoices);
+    // relicChoices is null except after the relic fights (4, 8 and 16): then a relic screen follows the reward.
+    public IEnumerator RewardRoutine(PlayerController player, FaceDefinition[] facePool, FaceDefinition[] newFaces, int healAmount,
+                                     List<RelicDefinition> relicChoices = null)
     {
         cameraController.LookEnabled = false;
 
         offers = BuildOffers(player, facePool, newFaces, healAmount);
         yield return rig.MoveTo(monitorView);
-        ShowOffers(true);
-        chosen = null;
-        SetPrompt(promptText, "PICK A REWARD");
-        phase = Phase.ChooseFace;
-        yield return new WaitUntil(() => chosen != null);
-        ShowOffers(false);
-        SetPrompt(promptText, "");
+        yield return ChooseOnScreen("PICK A REWARD");
 
         switch (chosen.kind)
         {
             case RewardKind.Face:
                 chosenFace = chosen.face;
-                yield return FaceRewardRoutine(player.GetDice());
+                yield return FaceRewardRoutine(player);
                 break;
 
             case RewardKind.Heal:
@@ -127,16 +128,157 @@ public class RewardController : MonoBehaviour
                 break;
         }
 
+        if (relicChoices != null && relicChoices.Count > 0) yield return RelicPick(player, relicChoices);
+
         yield return rig.MoveTo(tableView);
         cameraController.LookEnabled = true;
     }
 
-    // New face: pick a die, pick a side, the new face slams onto it
-    public IEnumerator FaceRewardRoutine(Die[] playerDice)
+    // Shows 'offers' on the dot screen and waits for a click. Leaves the pick in 'chosen'.
+    private IEnumerator ChooseOnScreen(string prompt)
     {
+        screenPrompt = prompt;
+        ShowOffers(true);
+        chosen = null;
+        SetPrompt(promptText, prompt);
+        phase = Phase.ChooseFace;
+        yield return new WaitUntil(() => chosen != null);
+        ShowOffers(false);
+        SetPrompt(promptText, "");
+    }
+
+    // ---------- Relics ----------
+
+    // Pick 1 of the relics GameController rolled (3 you don't have yet)
+    private IEnumerator RelicPick(PlayerController player, List<RelicDefinition> choices)
+    {
+        yield return rig.MoveTo(monitorView);   // a face reward leaves the camera on the dice
+        offers = new List<RewardOffer>();
+        foreach (RelicDefinition r in choices)
+        {
+            offers.Add(new RewardOffer
+            {
+                kind = RewardKind.Relic,
+                relic = r,
+                icon = r.icon,
+                label = $"{r.displayName.ToUpper()} · {r.line.ToUpper()}"
+            });
+        }
+        strip.Show("RELICS LAST ALL RUN", promptColor);   // so it doesn't read as a second reward screen
+        yield return ChooseOnScreen("PICK A RELIC");
+        strip.Clear();
+
+        RelicDefinition relic = chosen.relic;
+        player.AddRelic(relic);   // the relic bar pops the new icon and plays the relic sound
+        strip.Flash($"NEW RELIC · {relic.displayName.ToUpper()}", promptColor, relicRevealTime);
+        yield return Reveal(relic.icon, $"{relic.displayName.ToUpper()} · {relic.line.ToUpper()}", relicRevealTime);
+    }
+
+    // The thing you just got, alone and big in the middle of the screen, with what it does on the sign
+    private IEnumerator Reveal(Sprite icon, string text, float time)
+    {
+        if (offerImages.Length == 0) yield break;
+        rewardPanel.SetActive(true);
+        equationPanel.SetActive(false);
+        foreach (Image image in offerImages) image.gameObject.SetActive(false);
+
+        Image middle = offerImages[offerImages.Length / 2];
+        middle.sprite = icon;
+        middle.color = offerColor;
+        middle.gameObject.SetActive(true);
+        SetPrompt(promptText, text);
+
+        Transform t = middle.transform;
+        Vector3 size = t.localScale;
+        const float popTime = 0.35f;
+        for (float e = 0f; e < popTime; e += Time.deltaTime)
+        {
+            float k = e / popTime;
+            t.localScale = size * (1f + 0.6f * Mathf.Sin(k * Mathf.PI) * (1f - k * 0.5f));   // swells, then settles
+            yield return null;
+        }
+        t.localScale = size;
+        yield return new WaitForSeconds(Mathf.Max(0f, time - popTime));
+
+        middle.gameObject.SetActive(false);
+        rewardPanel.SetActive(false);
+        equationPanel.SetActive(true);
+        SetPrompt(promptText, "");
+    }
+
+    // ---------- Spare dice ----------
+
+    // Before a Low fight: swap the spare in for your operator die. Before a Low or Target fight, with the Pocket Die
+    // relic: the Pocket Die in for one of your number dice. PlayerController undoes both when the fight ends.
+    // No spare at Target tables: it can't be upgraded, and - - ÷ ÷ + + is built for getting near 0, not for hitting 437.
+    public IEnumerator SwapRoutine(PlayerController player, TableType table)
+    {
+        bool offerSpare = player.HasSpare && table == TableType.Low;
+        bool offerPocket = player.HasPocket;
+        if (!offerSpare && !offerPocket) yield break;
+        cameraController.LookEnabled = false;
+        yield return rig.MoveTo(monitorView);
+
+        if (offerSpare)
+        {
+            offers = new List<RewardOffer>
+            {
+                new RewardOffer { kind = RewardKind.Keep, icon = keepIcon, label = "KEEP YOUR DIE" },
+                new RewardOffer { kind = RewardKind.Swap, icon = player.SpareDefinition.icon,
+                                  label = "SPARE: " + FaceList(player.SpareDefinition) },
+            };
+            yield return ChooseOnScreen("SWAP IN YOUR SPARE?");
+            if (chosen.kind == RewardKind.Swap) player.SwapInSpare();
+        }
+
+        if (offerPocket)
+        {
+            offers = new List<RewardOffer>
+            {
+                new RewardOffer { kind = RewardKind.Keep, icon = keepIcon, label = "KEEP YOUR DICE" },
+                new RewardOffer { kind = RewardKind.Swap, icon = player.PocketDefinition.icon,
+                                  label = "POCKET DIE: " + FaceList(player.PocketDefinition) },
+            };
+            yield return ChooseOnScreen("USE THE POCKET DIE?");
+            if (chosen.kind == RewardKind.Swap)
+            {
+                yield return rig.MoveTo(tableView);   // your dice are lying on the table now, not in the slots
+                yield return PickDie(player.NumberDiceInPlay().ToArray(), "PICK A DIE TO SWAP OUT");
+                Die picked = die;
+                die = null;
+                strip.Clear();
+                player.SwapInPocket(picked);
+            }
+        }
+
+        yield return rig.MoveTo(tableView);
+        cameraController.LookEnabled = true;
+    }
+
+    private static string FaceList(DieDefinition def)
+    {
+        string text = "";
+        foreach (FaceDefinition f in def.faceDefinitions)
+        {
+            if (f == null) continue;
+            text += (f.type == FaceType.Number ? f.number.ToString() : GameController.OpSymbol(f.op)) + " ";
+        }
+        return text.TrimEnd();
+    }
+
+    // New face: pick a die, pick a side, the new face slams onto it. A × only goes on a die under its × cap.
+    public IEnumerator FaceRewardRoutine(PlayerController player)
+    {
+        List<Die> choices = new List<Die>();
+        foreach (Die d in player.GetDice())
+        {
+            if (!IsMultiply(chosenFace) || player.HasMultiplyRoom(d)) choices.Add(d);
+        }
+        if (choices.Count == 0) yield break;   // can't happen: × is only offered while a die has room
+
         yield return rig.MoveTo(diceView);
         ShowChosenFace();
-        yield return PickDie(playerDice, "PICK A DIE");
+        yield return PickDie(choices.ToArray(), IsMultiply(chosenFace) ? "PICK A DIE WITH ROOM FOR A ×" : "PICK A DIE");
         ClearChosenFace();
 
         yield return PickSide("PICK A SIDE", "RIGHT DRAG OR Q/E TO TURN · CLICK A SIDE TWICE TO PICK IT", false);
@@ -306,6 +448,9 @@ public class RewardController : MonoBehaviour
         List<RewardOffer> result = new List<RewardOffer>();
         List<FaceDefinition> bag = new List<FaceDefinition>(facePool);
 
+        // × cap: once your operator die holds all the × it can, × stops showing up (even an enemy's new ×)
+        if (!player.OperatorDieHasRoom()) bag.RemoveAll(IsMultiply);
+
         // 1. Two different faces: what this enemy just unlocked comes first, then random ones from the pool
         List<FaceDefinition> faces = new List<FaceDefinition>();
         if (newFaces != null)
@@ -369,6 +514,11 @@ public class RewardController : MonoBehaviour
         return face;
     }
 
+    private static bool IsMultiply(FaceDefinition f)
+    {
+        return f != null && f.type == FaceType.Operator && f.op == Operator.Multiply;
+    }
+
     private RewardOffer FaceOffer(FaceDefinition f)
     {
         return new RewardOffer { kind = RewardKind.Face, face = f, icon = f.icon, label = "NEW FACE" };
@@ -385,17 +535,13 @@ public class RewardController : MonoBehaviour
         equationPanel.SetActive(!on);
         if (on)
         {
-            for (int i = 0; i < offerImages.Length; i++)
+            for (int i = 0; i < offerImages.Length; i++) offerImages[i].gameObject.SetActive(false);
+            for (int option = 0; option < offers.Count; option++)
             {
-                if (i < offers.Count)
-                {
-                    offerImages[i].sprite = offers[i].icon;
-                    offerImages[i].gameObject.SetActive(true);
-                }
-                else
-                {
-                    offerImages[i].gameObject.SetActive(false);
-                }
+                int i = ImageFor(option);
+                if (i >= offerImages.Length) continue;
+                offerImages[i].sprite = offers[option].icon;
+                offerImages[i].gameObject.SetActive(true);
             }
         }
     }
@@ -411,14 +557,22 @@ public class RewardController : MonoBehaviour
         return Mathf.Clamp(option, 0, offers.Count - 1);
     }
 
+    // Two choices (keep or swap) go in the outer images, so each sits inside its half of the screen
+    private int ImageFor(int option)
+    {
+        if (offers.Count == 2 && offerImages.Length >= 3) return option == 0 ? 0 : offerImages.Length - 1;
+        return option;
+    }
+
     private void HighlightOffer(int hoveredOption)
     {
-        for (int i = 0; i < offerImages.Length; i++)
+        for (int option = 0; option < offers.Count; option++)
         {
-            if (i < offers.Count)
-                offerImages[i].color = (i == hoveredOption || hoveredOption == -1) ? offerColor : dimColor;
+            int i = ImageFor(option);
+            if (i < offerImages.Length)
+                offerImages[i].color = (option == hoveredOption || hoveredOption == -1) ? offerColor : dimColor;
         }
-        SetPrompt(promptText, hoveredOption >= 0 ? offers[hoveredOption].label : "PICK A REWARD");
+        SetPrompt(promptText, hoveredOption >= 0 ? offers[hoveredOption].label : screenPrompt);
     }
 
     // ---------- Phase B: dice ----------
@@ -503,7 +657,7 @@ public class RewardController : MonoBehaviour
     private bool MouseRaycast(out RaycastHit hit)
     {
         Ray ray = cam.ScreenPointToRay(mousePos.action.ReadValue<Vector2>());
-        return Physics.Raycast(ray, out hit, 100f, ~0, QueryTriggerInteraction.Ignore);
+        return Physics.Raycast(ray, out hit, 100f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);   // skips Ignore Raycast (the table rails)
     }
 
     private void UpdateHover(Transform target)
@@ -585,7 +739,7 @@ public class RewardController : MonoBehaviour
         isSnapping = false;
     }
 
-    public enum RewardKind { Face, Die, Heal, Grow }
+    public enum RewardKind { Face, Die, Heal, Grow, Relic, Keep, Swap }
 
     public class RewardOffer
     {
@@ -593,6 +747,7 @@ public class RewardController : MonoBehaviour
         public FaceDefinition face;   // kind == Face
         public DieDefinition die;     // kind == Die
         public int heal;              // kind == Heal
+        public RelicDefinition relic; // kind == Relic
         public Sprite icon;           // what the dot screen shows
         public string label;          // what the sign says when you hover it
     }

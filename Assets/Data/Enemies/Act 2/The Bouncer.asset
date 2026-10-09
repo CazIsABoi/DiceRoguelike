@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: The Bouncer
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: The Bouncer
-  maxHP: 1200
+  maxHP: 1500
   dice:
   - {fileID: 11400000, guid: 2e82001ac9c37c9469eea2d15951441c, type: 2}
   - {fileID: 11400000, guid: 2e82001ac9c37c9469eea2d15951441c, type: 2}
@@ -26,6 +26,8 @@ MonoBehaviour:
   rethrowBelow: 6
   minGain: 2
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Name's not on the list.

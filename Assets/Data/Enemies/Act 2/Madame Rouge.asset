@@ -13,11 +13,11 @@ MonoBehaviour:
   m_Name: Madame Rouge
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Madame Rouge
-  maxHP: 1000
+  maxHP: 1500
   dice:
-  - {fileID: 11400000, guid: 5cf60d61697167a4a8fd0a1a7a02c6d5, type: 2}
-  - {fileID: 11400000, guid: 5cf60d61697167a4a8fd0a1a7a02c6d5, type: 2}
-  - {fileID: 11400000, guid: 5cf60d61697167a4a8fd0a1a7a02c6d5, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   - {fileID: 11400000, guid: dd850c493094bb9428f807fed21cde5f, type: 2}
   layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
   brain: 0
@@ -26,6 +26,8 @@ MonoBehaviour:
   rethrowBelow: 2
   minGain: 2
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Place your bets, darling

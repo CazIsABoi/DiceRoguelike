@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: Carrie
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Carrie
-  maxHP: 900
+  maxHP: 1350
   dice:
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
-  - {fileID: 11400000, guid: abc53b7dd462d7044b9d089100d06ab7, type: 2}
+  - {fileID: 11400000, guid: dd850c493094bb9428f807fed21cde5f, type: 2}
   layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
   brain: 2
   throwAttempts: 1
@@ -26,6 +26,8 @@ MonoBehaviour:
   rethrowBelow: 2
   minGain: 2
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Exact change only.

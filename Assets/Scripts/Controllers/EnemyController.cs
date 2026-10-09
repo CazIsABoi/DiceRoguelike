@@ -30,7 +30,8 @@ public class EnemyController : DiceSide
         InitHealth(enemy.maxHP);
         SpawnDice(enemy.dice);
         SpawnSlots(new List<FaceType>(enemy.layout.pattern));
-        equationText.text = BuildEquation();
+        ClearTotal();
+        RefreshEquation(true);
     }
 
     public void StartTurn()
@@ -155,10 +156,17 @@ public class EnemyController : DiceSide
                     else operatorDice.Add(d);
                 }
 
-                // 2. Biggest numbers first
-                numberDice.Sort((a, b) => b.GetTopFace().number.CompareTo(a.GetTopFace().number));
-
-                Think("Biggest numbers first, obviously.");
+                // 2. Biggest numbers first (smallest first at a Low table)
+                if (Game.Table == TableType.Low)
+                {
+                    numberDice.Sort((a, b) => a.GetTopFace().number.CompareTo(b.GetTopFace().number));
+                    Think("Smallest numbers first. Keep it near zero.");
+                }
+                else
+                {
+                    numberDice.Sort((a, b) => b.GetTopFace().number.CompareTo(a.GetTopFace().number));
+                    Think("Biggest numbers first, obviously.");
+                }
 
                 // 3. Hand them out to the slots, left to right
                 int n = 0;
@@ -212,6 +220,12 @@ public class EnemyController : DiceSide
         switch (brain)
         {
             case EnemyBrain.Greedy:
+                if (Game.Table == TableType.Low)
+                {
+                    // Closest to 0 wins: big numbers, + and × are the bad faces now
+                    if (face.type == FaceType.Number) return face.number >= 10 - enemy.rethrowBelow;
+                    return face.op == Operator.Add || face.op == Operator.Multiply;
+                }
                 if (face.type == FaceType.Number && face.number < enemy.rethrowBelow) return true;
                 else if (face.type == FaceType.Operator && (face.op == Operator.Subtract || face.op == Operator.Divide)) return true;
                 else return false;
@@ -241,7 +255,7 @@ public class EnemyController : DiceSide
             {
                 if (face == null) continue;                    // skip empty faces
                 FindBestOrder(out int score, die, face);
-                if (score == int.MinValue) score = 0;          // nothing fits = count it as a fizzle
+                if (score == int.MinValue) score = Game.WorstScore;   // nothing fits = count it as a fizzle
                 total += score;
                 counted++;
             }
@@ -287,8 +301,8 @@ public class EnemyController : DiceSide
             }
             if (!fits) continue;
 
-            // 2. Score it, keep it if it's the best so far
-            int score = GameController.Evaluate(faces);
+            // 2. Score it for this table (bigger, closer to 0 or closer to the target), keep it if it's the best so far
+            int score = Game.TableScore(GameController.Evaluate(faces), 0);
             if (score > bestScore)
             {
                 bestScore = score;
@@ -331,10 +345,10 @@ public class EnemyController : DiceSide
     }
 
     public void SayIntro()
-{
+    {
         dialogue.SetSpeaker(enemy.displayName, enemy.portrait, enemy.portraitTalk, enemy.voice);
         dialogue.SayNow(enemy.intro);
-}
+    }
     public void SayDefeat() => dialogue.SayNow(enemy.defeatLine);
     public void SayTurnResult(bool iWon) => SayOneOf(iWon ? enemy.winLines : enemy.loseLines);
 

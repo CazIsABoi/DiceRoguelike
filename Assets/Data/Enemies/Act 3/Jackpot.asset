@@ -15,10 +15,10 @@ MonoBehaviour:
   displayName: Jackpot
   maxHP: 6000
   dice:
-  - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
-  - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
-  - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
-  - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   layout: {fileID: 11400000, guid: 0b56f05ea8c8fe344985de5708e756f0, type: 2}
   brain: 0
   throwAttempts: 1
@@ -26,6 +26,8 @@ MonoBehaviour:
   rethrowBelow: 2
   minGain: 2
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: INSERT COIN. PULL LEVER.

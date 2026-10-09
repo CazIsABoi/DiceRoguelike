@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: Tally
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Tally
-  maxHP: 18
+  maxHP: 6
   dice:
   - {fileID: 11400000, guid: 38871db142b5f6248a4a887c6a67a502, type: 2}
   - {fileID: 11400000, guid: 38871db142b5f6248a4a887c6a67a502, type: 2}
-  - {fileID: 11400000, guid: b4b43e029f03c974e82994d370f8daa8, type: 2}
-  - {fileID: 11400000, guid: b4b43e029f03c974e82994d370f8daa8, type: 2}
+  - {fileID: 11400000, guid: fcb716d0f675a204c980691f47e48693, type: 2}
+  - {fileID: 11400000, guid: fcb716d0f675a204c980691f47e48693, type: 2}
   - {fileID: 11400000, guid: 38871db142b5f6248a4a887c6a67a502, type: 2}
   layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
   brain: 1
@@ -27,6 +27,8 @@ MonoBehaviour:
   rethrowBelow: 2
   minGain: 2
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  table: 1
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Tally. Bookkeeper. I add.

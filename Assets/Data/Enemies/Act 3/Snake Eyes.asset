@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Snake Eyes
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Snake Eyes
-  maxHP: 10000
+  maxHP: 20000
   dice:
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
@@ -27,6 +27,8 @@ MonoBehaviour:
   rethrowBelow: 5
   minGain: 2
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Let'sss play long.
