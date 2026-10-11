@@ -13,25 +13,35 @@ MonoBehaviour:
   m_Name: High Roller
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: High Roller
-  maxHP: 18000
+  maxHP: 2200
   dice:
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
-  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
-  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   - {fileID: 11400000, guid: dd850c493094bb9428f807fed21cde5f, type: 2}
+  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
+  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   layout: {fileID: 11400000, guid: fde4265c052323147bc92dc480ce3f1a, type: 2}
-  brain: 0
-  throwAttempts: 1
+  brain: 2
+  traits:
+  - {fileID: 11400000, guid: a087d9bb1c3746c4f9f0c9acb3b9a4c9, type: 2}
+  throwAttempts: 2
   blunderChance: 0
   rethrowBelow: 2
-  minGain: 2
+  minGain: 300
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
   table: 0
   targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: 'Minimum bet: everything.'
+  rerollLines:
+  - Pocket change. Again.
+  - Raise.
+  - Bigger.
+  keepLines:
+  - All in.
+  - Whale's choice.
+  - Money talks.
   winLines:
   - Big money!
   - Let it ride!

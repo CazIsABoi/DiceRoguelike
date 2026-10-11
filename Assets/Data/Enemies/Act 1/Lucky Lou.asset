@@ -13,21 +13,32 @@ MonoBehaviour:
   m_Name: Lucky Lou
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Lucky Lou
-  maxHP: 28
+  maxHP: 22
   dice:
   - {fileID: 11400000, guid: a39690b01d3a67e4dacc6c15c5e7c5dd, type: 2}
-  - {fileID: 11400000, guid: a39690b01d3a67e4dacc6c15c5e7c5dd, type: 2}
   - {fileID: 11400000, guid: 482aa2a32b0f9284c8b4b3b4f70bf6c5, type: 2}
+  - {fileID: 11400000, guid: a39690b01d3a67e4dacc6c15c5e7c5dd, type: 2}
   layout: {fileID: 11400000, guid: 7c23da8478adfaa42a56f331a5c41966, type: 2}
   brain: 0
+  traits:
+  - {fileID: 11400000, guid: a087d9bb1c3746c4f9f0c9acb3b9a4c9, type: 2}
   throwAttempts: 1
   blunderChance: 0
   rethrowBelow: 4
   minGain: 2
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Name's Lou. Feeling lucky?
+  rerollLines:
+  - Eh. One more spin.
+  keepLines:
+  - Let it ride.
+  - Feeling lucky.
+  - Luck's a lady.
+  - Don't blink.
   winLines:
   - Let it ride!
   - House money, kid.

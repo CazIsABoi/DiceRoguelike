@@ -13,21 +13,32 @@ MonoBehaviour:
   m_Name: Quartz
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Quartz
-  maxHP: 22
+  maxHP: 9
   dice:
   - {fileID: 11400000, guid: 75885bc0e5455a94b86732214b96a260, type: 2}
   - {fileID: 11400000, guid: 1a54226f810f47f489a70ce557846960, type: 2}
   - {fileID: 11400000, guid: 75885bc0e5455a94b86732214b96a260, type: 2}
   layout: {fileID: 11400000, guid: 7c23da8478adfaa42a56f331a5c41966, type: 2}
   brain: 2
-  throwAttempts: 1
+  traits: []
+  throwAttempts: 2
   blunderChance: 0
   rethrowBelow: 2
-  minGain: 2
+  minGain: 6
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: The crystals foresaw you.
+  rerollLines:
+  - The crystal says no.
+  - Not a prime omen.
+  - Again. The spirits insist.
+  keepLines:
+  - It was foretold
+  - "I\u2019ve seen this."
+  - The stars agree.
   winLines:
   - As it was written.
   - The primes never lie.

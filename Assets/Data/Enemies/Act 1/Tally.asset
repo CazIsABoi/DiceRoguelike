@@ -13,15 +13,16 @@ MonoBehaviour:
   m_Name: Tally
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Tally
-  maxHP: 6
+  maxHP: 5
   dice:
   - {fileID: 11400000, guid: 38871db142b5f6248a4a887c6a67a502, type: 2}
-  - {fileID: 11400000, guid: 38871db142b5f6248a4a887c6a67a502, type: 2}
   - {fileID: 11400000, guid: fcb716d0f675a204c980691f47e48693, type: 2}
+  - {fileID: 11400000, guid: 38871db142b5f6248a4a887c6a67a502, type: 2}
   - {fileID: 11400000, guid: fcb716d0f675a204c980691f47e48693, type: 2}
   - {fileID: 11400000, guid: 38871db142b5f6248a4a887c6a67a502, type: 2}
   layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
   brain: 1
+  traits: []
   throwAttempts: 2
   blunderChance: 0
   rethrowBelow: 2
@@ -32,6 +33,14 @@ MonoBehaviour:
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Tally. Bookkeeper. I add.
+  rerollLines:
+  - "That doesn\u2019t balance."
+  - Recount.
+  - Unacceptable figure.
+  keepLines:
+  - The books are closed.
+  - Balanced.
+  - Filed.
   winLines:
   - It all adds up.
   - Noted in the ledger.

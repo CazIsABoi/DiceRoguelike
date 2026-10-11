@@ -13,23 +13,34 @@ MonoBehaviour:
   m_Name: Dodeca
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Dodeca
-  maxHP: 50
+  maxHP: 10
   dice:
   - {fileID: 11400000, guid: 880b388722bd6b4468a290711d81d8a2, type: 2}
-  - {fileID: 11400000, guid: 880b388722bd6b4468a290711d81d8a2, type: 2}
+  - {fileID: 11400000, guid: 482aa2a32b0f9284c8b4b3b4f70bf6c5, type: 2}
   - {fileID: 11400000, guid: 880b388722bd6b4468a290711d81d8a2, type: 2}
   - {fileID: 11400000, guid: 482aa2a32b0f9284c8b4b3b4f70bf6c5, type: 2}
-  - {fileID: 11400000, guid: 482aa2a32b0f9284c8b4b3b4f70bf6c5, type: 2}
+  - {fileID: 11400000, guid: 880b388722bd6b4468a290711d81d8a2, type: 2}
   layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
   brain: 2
-  throwAttempts: 1
+  traits: []
+  throwAttempts: 2
   blunderChance: 0
   rethrowBelow: 4
-  minGain: 2
+  minGain: 3
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Class is in session.
+  rerollLines:
+  - Hm. Statistically poor.
+  - Let us revise.
+  - Incorrect. Again.
+  keepLines:
+  - Q.E.D.
+  - Elementary.
+  - The proof stands.
   winLines:
   - Elementary.
   - The remainder is mine.

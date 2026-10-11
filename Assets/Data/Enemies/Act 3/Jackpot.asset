@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Jackpot
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Jackpot
-  maxHP: 6000
+  maxHP: 1200
   dice:
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
@@ -21,6 +21,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   layout: {fileID: 11400000, guid: 0b56f05ea8c8fe344985de5708e756f0, type: 2}
   brain: 0
+  traits: []
   throwAttempts: 1
   blunderChance: 0
   rethrowBelow: 2
@@ -31,6 +32,13 @@ MonoBehaviour:
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: INSERT COIN. PULL LEVER.
+  rerollLines:
+  - clunk Respin
+  keepLines:
+  - ding ding ding
+  - JACKPOT!
+  - PAYOUT
+  - whirr... CHERRY.
   winLines:
   - JACKPOT! JACKPOT!
   - Ding ding ding!

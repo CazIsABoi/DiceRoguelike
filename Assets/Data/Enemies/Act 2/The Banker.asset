@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: The Banker
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: The Banker
-  maxHP: 11000
+  maxHP: 1400
   dice:
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
@@ -21,16 +21,25 @@ MonoBehaviour:
   - {fileID: 11400000, guid: abc53b7dd462d7044b9d089100d06ab7, type: 2}
   layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
   brain: 2
-  throwAttempts: 2
+  traits: []
+  throwAttempts: 3
   blunderChance: 0
   rethrowBelow: 6
-  minGain: 2
+  minGain: 5
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
   table: 2
-  targetRange: {x: 50, y: 600}
+  targetRange: {x: 100, y: 999}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: The bank never breaks.
+  rerollLines:
+  - A poor investment
+  - "Let\u2019s renegotiate."
+  - Withdraw that.
+  keepLines:
+  - Interest accrues.
+  - The vault is sealed.
+  - Sign here.
   winLines:
   - Interest is due.
   - The vault grows.

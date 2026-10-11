@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerController : DiceSide
 {
@@ -11,6 +12,8 @@ public class PlayerController : DiceSide
 
     [Header("Growing dice")]
     [SerializeField] private DieDefinition[] growShapes;    // Die_D8, Die_D10, Die_D12, smallest first: the sizes a number die grows into
+    [SerializeField, Range(0, 6)] private int growCopies = 1;   // how many of the new sides copy the number you picked. The rest get the
+                                                                // bigger shape's own number for that side (a D6 growing into a D8 gets your pick + an 8)
 
     [Header("× cap")]
     [SerializeField] private int facesPerMultiply = 3;      // a die holds one × per this many faces, rounded up: D6 2, D8 3, D10 4, D12 4, D20 7
@@ -22,6 +25,9 @@ public class PlayerController : DiceSide
     [Header("Relics")]
     [SerializeField, Range(0, 100)] private int insurancePercent = 25;   // Insurance leaves you on this much of your max HP
 
+    [Header("Speed Up")]
+    [SerializeField] private float speedUp = 3f;   // how fast time runs while you hold Shift and dice are rolling
+
     public int NumberDice { get; private set; }
     public int Stake { get; private set; } = 1;             // 1, 10, 100: one more zero for every number die past two
 
@@ -30,6 +36,7 @@ public class PlayerController : DiceSide
     public event System.Action<RelicType> OnRelicTriggered; // a relic just did something (or was just picked): its icon pops
     public bool InsuranceUsed { get; private set; }
     private int bonusRethrows;                              // Rabbit's Foot: refilled at the start of every fight
+
 
     // The spares are spawned once and parked (inactive) when they're not in play.
     // While one is in, the die it replaced is parked instead, faces and all.
@@ -103,7 +110,38 @@ public class PlayerController : DiceSide
         Die newDie = SpawnOneDie(def);
         System.Array.Resize(ref spawnedDice, spawnedDice.Length + 1);
         spawnedDice[spawnedDice.Length - 1] = newDie;
+        AssignSpawnSpots(true);
         RebuildSlots();
+    }
+
+    private void Update()   // if PlayerController already has an Update, add the call to it instead
+    {
+        UpdateSpeedUp();
+    }
+
+    private void UpdateSpeedUp()
+    {
+        if (Time.timeScale == 0f) return;   // a hit-stop is freezing the game: leave it alone
+
+        bool shift = Keyboard.current != null && Keyboard.current.shiftKey.isPressed;
+        bool wanted = shift && DiceController.AnyPlayerDiceRolling && !HoldingADie();
+        Time.timeScale = wanted ? speedUp : 1f;
+    }
+
+    // Is any of my dice in my hand right now? (flick speed is measured in game time, so never speed up then)
+    private bool HoldingADie()
+    {
+        if (spawnedDice == null) return false;
+        foreach (Die d in spawnedDice)
+        {
+            if (d != null && d.GetComponent<DiceController>().State == DieState.Held) return true;
+        }
+        return false;
+    }
+
+    private void OnDisable()
+    {
+        Time.timeScale = 1f;   // never leave the whole game stuck at 3x (scene change, end screen...)
     }
 
     // ---------- Growing dice ----------
@@ -140,7 +178,9 @@ public class PlayerController : DiceSide
         FaceDefinition[] faces = new FaceDefinition[shape.faceDefinitions.Length];
         for (int i = 0; i < faces.Length; i++)
         {
-            faces[i] = i < oldFaces.Length ? oldFaces[i] : oldFaces[copyIndex];
+            if (i < oldFaces.Length) faces[i] = oldFaces[i];                                   // every side it had stays
+            else if (i - oldFaces.Length < growCopies) faces[i] = oldFaces[copyIndex];        // your pick
+            else faces[i] = shape.faceDefinitions[i] != null ? shape.faceDefinitions[i] : oldFaces[copyIndex];   // the shape's own side
         }
 
         // A one-off definition that only lives for this run: the bigger shape, with this die's faces
@@ -154,6 +194,7 @@ public class PlayerController : DiceSide
         Die newDie = SpawnOneDie(grown);
         int index = System.Array.IndexOf(spawnedDice, oldDie);
         spawnedDice[index] = newDie;
+        AssignSpawnSpots(true);
         Destroy(oldDie.gameObject);
         RebuildSlots();
         return newDie;
@@ -228,6 +269,7 @@ public class PlayerController : DiceSide
     {
         if (bonusRethrows <= 0) return;
         bonusRethrows--;
+        Telemetry.BonusRethrow();
         OnRelicsChanged?.Invoke();
         OnRelicTriggered?.Invoke(RelicType.RabbitsFoot);
     }
@@ -275,6 +317,7 @@ public class PlayerController : DiceSide
         swappedOutOperator = spawnedDice[index];
         Park(swappedOutOperator);
         spawnedDice[index] = spareObject;
+        AssignSpawnSpots(true);
         RefreshEquation(false);
     }
 
@@ -289,6 +332,7 @@ public class PlayerController : DiceSide
         swappedOutNumber = numberDie;
         Park(swappedOutNumber);
         spawnedDice[index] = pocketObject;
+        AssignSpawnSpots(true);
         RefreshEquation(false);
         OnRelicTriggered?.Invoke(RelicType.PocketDie);
     }
@@ -306,9 +350,19 @@ public class PlayerController : DiceSide
     {
         int index = System.Array.IndexOf(spawnedDice, spare);
         if (index < 0) return;
+
+        original.transform.SetPositionAndRotation(spare.transform.position, spare.transform.rotation);
+        foreach (DiceSlot slot in diceSlots)
+        {
+            if (slot.CurrentDie != spare) continue;
+            slot.Clear();
+            slot.Place(original);     // the slot now points at the die that's actually sitting in it
+            break;
+        }
+
         Park(spare);
         original.gameObject.SetActive(true);
-        original.GetComponent<DiceController>().ResetForNewRound();   // back on the table, ready to throw
+        original.GetComponent<DiceController>().Idle();   // lie still: no hover, no physics, no input
         spawnedDice[index] = original;
     }
 

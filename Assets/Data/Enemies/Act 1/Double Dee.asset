@@ -13,21 +13,33 @@ MonoBehaviour:
   m_Name: Double Dee
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Double Dee
-  maxHP: 18
+  maxHP: 6
   dice:
   - {fileID: 11400000, guid: 77b1f8d31ae12b14f8b4781549e1c87a, type: 2}
   - {fileID: 11400000, guid: 77b1f8d31ae12b14f8b4781549e1c87a, type: 2}
   - {fileID: 11400000, guid: abc53b7dd462d7044b9d089100d06ab7, type: 2}
   layout: {fileID: 11400000, guid: 7c23da8478adfaa42a56f331a5c41966, type: 2}
   brain: 1
+  traits:
+  - {fileID: 11400000, guid: 98e32f2de1581a2409e788d30de41077, type: 2}
   throwAttempts: 1
   blunderChance: 0
   rethrowBelow: 4
   minGain: 2
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Double or nothing, baby!
+  rerollLines:
+  - Hot hand, baby!
+  - Double or nothing.
+  - Run it back!
+  keepLines:
+  - "Read \u2019em and weep."
+  - Too easy.
+  - Show-off move.
   winLines:
   - Times two! Times TWO!
   - Multiply the pain!
@@ -41,5 +53,5 @@ MonoBehaviour:
   - Overflow! Oops.
   defeatLine: Double KO. On me.
   unlockFaces:
-  - {fileID: 11400000, guid: 252adc53d36cc0e4c99ce3812a094820, type: 2}
+  - {fileID: 11400000, guid: 314e91faef7426a4bb4886b709de9119, type: 2}
   dieDrop: {fileID: 0}

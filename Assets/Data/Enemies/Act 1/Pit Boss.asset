@@ -13,15 +13,16 @@ MonoBehaviour:
   m_Name: Pit Boss
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Pit Boss
-  maxHP: 40
+  maxHP: 35
   dice:
   - {fileID: 11400000, guid: 5cf60d61697167a4a8fd0a1a7a02c6d5, type: 2}
-  - {fileID: 11400000, guid: 5cf60d61697167a4a8fd0a1a7a02c6d5, type: 2}
+  - {fileID: 11400000, guid: 2271aa48cda331c469745cea8ce0313f, type: 2}
   - {fileID: 11400000, guid: 5cf60d61697167a4a8fd0a1a7a02c6d5, type: 2}
   - {fileID: 11400000, guid: 2271aa48cda331c469745cea8ce0313f, type: 2}
-  - {fileID: 11400000, guid: 2271aa48cda331c469745cea8ce0313f, type: 2}
+  - {fileID: 11400000, guid: 5cf60d61697167a4a8fd0a1a7a02c6d5, type: 2}
   layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
   brain: 2
+  traits: []
   throwAttempts: 2
   blunderChance: 0
   rethrowBelow: 6
@@ -32,6 +33,14 @@ MonoBehaviour:
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: The House sent me. Sit.
+  rerollLines:
+  - The house adjusts.
+  - "We\u2019ll correct that."
+  - Floor says no.
+  keepLines:
+  - "The table\u2019s settled."
+  - Pay up.
+  - House stands.
   winLines:
   - The floor takes its cut.
   - Another one for the House.

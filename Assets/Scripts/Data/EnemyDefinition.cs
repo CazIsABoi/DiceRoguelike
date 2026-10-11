@@ -17,6 +17,7 @@ public class EnemyDefinition : ScriptableObject
 
     [Header("Personality")]
     public EnemyBrain brain;
+    public EnemyTrait[] traits;
     public int throwAttempts = 1;
     [Range(0f, 1f)] public float blunderChance = 0f;   // chance to skip thinking and just slap dice in
     public int rethrowBelow = 2;                       // Greedy: rethrows numbers under this
@@ -33,6 +34,8 @@ public class EnemyDefinition : ScriptableObject
 
     [Header("Flavour")]
     [TextArea] public string intro;    // when it sits down
+    public string[] rerollLines = { "No.", "Not good enough.", "Again." };
+    public string[] keepLines = { "That'll do.", "Beat that." };
     public string[] winLines;          // it won a turn
     public string[] loseLines;         // it lost a turn
     public string[] bustLines;         // it busted

@@ -57,7 +57,9 @@ public class RewardController : MonoBehaviour
     [Header("Offers")]
     [SerializeField] private Sprite healIcon;
     [SerializeField] private Sprite growIcon;             // Reward_Grow
+    [SerializeField, Range(0f, 1f)] private float growChance = 0.35f;   // how often Grow takes the special slot (it used to show up almost every time)
     [SerializeField] private Sprite keepIcon;             // "keep your die" on the spare swap screen
+    [SerializeField] private TMP_Text offerDescription;   // one big text under the row of offers
 
     [Header("Relic Reveal")]
     [SerializeField] private float relicRevealTime = 2.2f;   // the picked relic stays big on the screen this long
@@ -75,6 +77,7 @@ public class RewardController : MonoBehaviour
 
     // Phase B: choose a die
     private Die[] candidates;
+    private string pickPrompt;  
 
     // Phase C: inspect + pick a side
     private Die die;
@@ -92,6 +95,9 @@ public class RewardController : MonoBehaviour
     private Vector3 hoveredScale;
 
     private MaterialPropertyBlock glowBlock;
+    private string rewardNote;   // what a face went over, or how a die grew, for the sheet
+    private bool xWasCapped;   // a × was in the pool, but every die is full
+
 
     // ---------- Entry point ----------
 
@@ -104,7 +110,11 @@ public class RewardController : MonoBehaviour
 
         offers = BuildOffers(player, facePool, newFaces, healAmount);
         yield return rig.MoveTo(monitorView);
+        if (xWasCapped) strip.Flash("× FULL · NO ROOM FOR MORE ON YOUR DICE", promptColor, 3f);
         yield return ChooseOnScreen("PICK A REWARD");
+        List<string> offered = OfferNames();
+        RewardOffer pick = chosen;
+        rewardNote = "";
 
         switch (chosen.kind)
         {
@@ -128,6 +138,8 @@ public class RewardController : MonoBehaviour
                 break;
         }
 
+        Telemetry.Choice("reward", offered, OfferName(pick), rewardNote);
+
         if (relicChoices != null && relicChoices.Count > 0) yield return RelicPick(player, relicChoices);
 
         yield return rig.MoveTo(tableView);
@@ -145,6 +157,7 @@ public class RewardController : MonoBehaviour
         yield return new WaitUntil(() => chosen != null);
         ShowOffers(false);
         SetPrompt(promptText, "");
+        SetPrompt(offerDescription, "");
     }
 
     // ---------- Relics ----------
@@ -166,6 +179,7 @@ public class RewardController : MonoBehaviour
         }
         strip.Show("RELICS LAST ALL RUN", promptColor);   // so it doesn't read as a second reward screen
         yield return ChooseOnScreen("PICK A RELIC");
+        Telemetry.Choice("relic", OfferNames(), OfferName(chosen));
         strip.Clear();
 
         RelicDefinition relic = chosen.relic;
@@ -223,11 +237,13 @@ public class RewardController : MonoBehaviour
         {
             offers = new List<RewardOffer>
             {
-                new RewardOffer { kind = RewardKind.Keep, icon = keepIcon, label = "KEEP YOUR DIE" },
-                new RewardOffer { kind = RewardKind.Swap, icon = player.SpareDefinition.icon,
-                                  label = "SPARE: " + FaceList(player.SpareDefinition) },
+                new RewardOffer { kind = RewardKind.Keep, icon = keepIcon, label = "KEEP YOUR DIE", description = "PLAY THIS FIGHT WITH YOUR OWN DIE" },
+                new RewardOffer { kind = RewardKind.Swap, icon = player.SpareDefinition.icon, label = "SPARE: " + FaceList(player.SpareDefinition),
+                                  description = "BETTER FOR GETTING CLOSE TO 0" },
             };
+            Tutorial.Hint("lowtable", "LOW TABLE: CLOSEST TO 0 WINS · 2 BEATS 9");
             yield return ChooseOnScreen("SWAP IN YOUR SPARE?");
+            Telemetry.Choice("spare", OfferNames(), OfferName(chosen));
             if (chosen.kind == RewardKind.Swap) player.SwapInSpare();
         }
 
@@ -235,11 +251,14 @@ public class RewardController : MonoBehaviour
         {
             offers = new List<RewardOffer>
             {
-                new RewardOffer { kind = RewardKind.Keep, icon = keepIcon, label = "KEEP YOUR DICE" },
-                new RewardOffer { kind = RewardKind.Swap, icon = player.PocketDefinition.icon,
-                                  label = "POCKET DIE: " + FaceList(player.PocketDefinition) },
+                new RewardOffer { kind = RewardKind.Keep, icon = keepIcon, label = "KEEP YOUR DICE", description = "PLAY THIS FIGHT WITH YOUR OWN DICE" },
+                new RewardOffer { kind = RewardKind.Swap, icon = player.PocketDefinition.icon, label = "POCKET DIE: " + FaceList(player.PocketDefinition),
+                                  description = "SWAP A NUMBER DIE FOR SMALL NUMBERS THIS FIGHT" },
             };
             yield return ChooseOnScreen("USE THE POCKET DIE?");
+            List<string> pocketOffers = OfferNames();
+            string pocketPick = OfferName(chosen);
+            string swappedOut = "";
             if (chosen.kind == RewardKind.Swap)
             {
                 yield return rig.MoveTo(tableView);   // your dice are lying on the table now, not in the slots
@@ -247,8 +266,10 @@ public class RewardController : MonoBehaviour
                 Die picked = die;
                 die = null;
                 strip.Clear();
+                swappedOut = Telemetry.Name(picked);
                 player.SwapInPocket(picked);
             }
+            Telemetry.Choice("pocket", pocketOffers, pocketPick, swappedOut);
         }
 
         yield return rig.MoveTo(tableView);
@@ -282,6 +303,8 @@ public class RewardController : MonoBehaviour
         ClearChosenFace();
 
         yield return PickSide("PICK A SIDE", "RIGHT DRAG OR Q/E TO TURN · CLICK A SIDE TWICE TO PICK IT", false);
+        FaceDefinition old = die.GetCurrentFaces()[selectedIndex];
+        rewardNote = $"{(old == null ? "blank" : Telemetry.Name(old))} on {(PlayerController.IsNumberDie(die) ? "number" : "operator")} die";
 
         // Swap
         yield return die.SwapFace(selectedIndex, chosenFace);
@@ -306,18 +329,32 @@ public class RewardController : MonoBehaviour
 
         yield return rig.MoveTo(diceView);
         yield return PickDie(growable.ToArray(), "PICK A DIE TO GROW");
-        yield return PickSide("PICK A NUMBER TO COPY", "RIGHT DRAG OR Q/E TO TURN · CLICK A NUMBER TWICE TO COPY IT", true);
+        yield return PickSide("PICK A NUMBER FOR THE NEW SIDE", "RIGHT DRAG OR Q/E TO TURN · CLICK A NUMBER TWICE · ONE NEW SIDE COPIES IT", true);
 
         // Back to where it was, then swap it for the bigger one
         die.transform.SetParent(homeParent, true);
         yield return MoveDieWorld(homePos, homeRot);
 
         string newShape = player.NextShape(die).displayName;
+        rewardNote = $"{die.GetCurrentFaces().Length} sides to {newShape}, copied {Telemetry.Name(die.GetCurrentFaces()[selectedIndex])}";
         player.GrowDie(die, selectedIndex);
         die = null;
 
         strip.Flash(string.IsNullOrEmpty(newShape) ? "YOUR DIE GREW!" : $"IT GREW INTO A {newShape.ToUpper()}!", promptColor, 2f);
         yield return new WaitForSeconds(1.5f);   // watch it drop in
+    }
+    private IEnumerator WarnFull(Die full)
+    {
+        strip.Flash("THAT DIE IS FULL OF ×", Color.red, 1.5f);
+        Vector3 home = full.transform.position;
+        for (float t = 0f; t < 0.3f; t += Time.deltaTime)
+        {
+            full.transform.position = home + cam.transform.right * Mathf.Sin(t * 60f) * 0.05f * (1f - t / 0.3f);
+            yield return null;
+        }
+        full.transform.position = home;
+        yield return new WaitForSeconds(1.2f);
+        if (phase == Phase.ChooseDie) strip.Show(pickPrompt, promptColor);   // still picking: the instruction comes back
     }
 
     // ---------- Shared steps ----------
@@ -325,6 +362,7 @@ public class RewardController : MonoBehaviour
     // B. Click one of these dice. Leaves it in 'die'.
     private IEnumerator PickDie(Die[] choices, string prompt)
     {
+        pickPrompt = prompt;
         candidates = choices;
         die = null;
         strip.Show(prompt, promptColor);
@@ -421,7 +459,12 @@ public class RewardController : MonoBehaviour
 
             case Phase.ChooseDie:
                 Die clicked = RaycastPlayerDie();
-                if (clicked == null) return;
+                if (clicked == null)
+                {
+                    Die full = RaycastAnyDie();                         // a die, just not one you can pick
+                    if (full != null && IsMultiply(chosenFace)) StartCoroutine(WarnFull(full));
+                    return;
+                }
                 ClearHover();
                 die = clicked;
                 phase = Phase.None;
@@ -449,7 +492,8 @@ public class RewardController : MonoBehaviour
         List<FaceDefinition> bag = new List<FaceDefinition>(facePool);
 
         // × cap: once your operator die holds all the × it can, × stops showing up (even an enemy's new ×)
-        if (!player.OperatorDieHasRoom()) bag.RemoveAll(IsMultiply);
+        xWasCapped = !player.OperatorDieHasRoom() && bag.Exists(IsMultiply);
+        if (xWasCapped) bag.RemoveAll(IsMultiply);
 
         // 1. Two different faces: what this enemy just unlocked comes first, then random ones from the pool
         List<FaceDefinition> faces = new List<FaceDefinition>();
@@ -474,9 +518,15 @@ public class RewardController : MonoBehaviour
         {
             result.Add(HealOffer(healAmount));
         }
-        else if (player.CanGrowAny())
+        else if (player.CanGrowAny() && Random.value < growChance)
         {
-            result.Add(new RewardOffer { kind = RewardKind.Grow, icon = growIcon, label = "GROW A DIE" });
+            result.Add(new RewardOffer
+            {
+                kind = RewardKind.Grow,
+                icon = growIcon,
+                label = "GROW A DIE",
+                description = "ONE DIE GETS MORE SIDES, COPYING A NUMBER YOU PICK"
+            });
         }
         else if (player.Health < player.MaxHealth)
         {
@@ -521,12 +571,22 @@ public class RewardController : MonoBehaviour
 
     private RewardOffer FaceOffer(FaceDefinition f)
     {
-        return new RewardOffer { kind = RewardKind.Face, face = f, icon = f.icon, label = "NEW FACE" };
+        string what = f.type == FaceType.Number ? $"PUT A {f.number} ON ONE SIDE OF ANY DIE"
+                    : IsMultiply(f) ? "MULTIPLY: TURNS 6 AND 7 INTO 42 · ONLY ON A DIE WITH ROOM"
+                    : $"PUT A {GameController.OpSymbol(f.op)} ON ONE SIDE OF ANY DIE";
+        return new RewardOffer { kind = RewardKind.Face, face = f, icon = f.icon, label = "NEW FACE", description = what };
     }
-
     private RewardOffer HealOffer(int amount)
     {
-        return new RewardOffer { kind = RewardKind.Heal, heal = amount, icon = healIcon, label = "+" + amount + " HP" };
+        return new RewardOffer
+        {
+            kind = RewardKind.Heal,
+            heal = amount,
+            icon = healIcon,
+            label = "+" + amount + " HP",
+            description = $"GET {amount} HP BACK"
+        };
+
     }
 
     private void ShowOffers(bool on)
@@ -573,6 +633,8 @@ public class RewardController : MonoBehaviour
                 offerImages[i].color = (option == hoveredOption || hoveredOption == -1) ? offerColor : dimColor;
         }
         SetPrompt(promptText, hoveredOption >= 0 ? offers[hoveredOption].label : screenPrompt);
+        SetPrompt(offerDescription, hoveredOption >= 0 ? offers[hoveredOption].description : "");
+
     }
 
     // ---------- Phase B: dice ----------
@@ -584,7 +646,11 @@ public class RewardController : MonoBehaviour
         if (hitDie == null || System.Array.IndexOf(candidates, hitDie) < 0) return null;   // only dice you can pick right now
         return hitDie;
     }
-
+    private Die RaycastAnyDie()
+    {
+        if (!MouseRaycast(out RaycastHit hit)) return null;
+        return hit.collider.GetComponentInParent<Die>();
+    }
     private void ShowChosenFace()
     {
         FaceView newChosenFace;
@@ -750,5 +816,26 @@ public class RewardController : MonoBehaviour
         public RelicDefinition relic; // kind == Relic
         public Sprite icon;           // what the dot screen shows
         public string label;          // what the sign says when you hover it
+        public string description;    // what the sign says when you hover it
     }
+
+    // What an offer is called in the sheet
+    private static string OfferName(RewardOffer o)
+    {
+        switch (o.kind)
+        {
+            case RewardKind.Face: return Telemetry.Name(o.face);
+            case RewardKind.Die: return Telemetry.Name(o.die);
+            case RewardKind.Relic: return Telemetry.Name(o.relic);
+            default: return o.kind.ToString().ToLower();   // heal, grow, keep, swap
+        }
+    }
+
+    private List<string> OfferNames()
+    {
+        List<string> names = new List<string>();
+        foreach (RewardOffer o in offers) names.Add(OfferName(o));
+        return names;
+    }
+
 }

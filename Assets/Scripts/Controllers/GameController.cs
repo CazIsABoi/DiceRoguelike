@@ -1,10 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement;
 using UnityEngine.Networking;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class GameController : MonoBehaviour
@@ -20,12 +21,20 @@ public class GameController : MonoBehaviour
     private int playerBust;
     private int enemyBust;
 
+    [Header("Maths")]
+    [SerializeField] private bool schoolOrder = true;   // × ÷ % before + −. Untick for the old left-to-right rule
+    public static bool SchoolOrder = true;
+
     [Header("Score UI")]
     [SerializeField] private TMP_Text scoreText;
     [SerializeField] private Gradient scoreGradient;
+    [SerializeField] private Color loseColor = new Color(1f, 0.25f, 0.2f);  
+
     [SerializeField] private StripDisplay strip;
     [SerializeField] private float maxLog = 3f;
     [SerializeField] private float maxShake = 15f;
+    [SerializeField] private CanvasGroup equationsGroup;   // the parent holding both equation texts
+    [SerializeField] private float swapTime = 0.25f;
 
     [Header("Bust")]
     [SerializeField] private int bustBase = 3;
@@ -43,6 +52,10 @@ public class GameController : MonoBehaviour
 
     [Header("Run")]
     [SerializeField] private EnemyDefinition[] ladder;
+    public EnemyDefinition[] Ladder => ladder;
+    public int[] ActStarts => actStarts;
+    public event System.Action<int> OnFightStarted;   
+    private EnemyTrait[] Traits => ladder[Fight - 1].traits;
     [SerializeField] private float introTime = 2f;
     [SerializeField] private float actBannerTime = 2.5f;
 
@@ -52,11 +65,18 @@ public class GameController : MonoBehaviour
     private List<FaceDefinition> facePool;
     [SerializeField, Range(0, 100)] private int healPercent = 40;   // the heal reward gives this much of your max HP
 
+    [Header("Turn Order")]
+    [SerializeField] private Transform tableView;
+    [SerializeField] private Transform enemyView;          // where the camera stands to watch the enemy
+    [SerializeField] private CameraController cameraController;
+    [SerializeField] private float readTime = 0.6f;       // to read its equation before the camera comes back
+
     [Header("Tables")]
     [SerializeField] private int lowCap = 20;                 // at a Low table a distance counts this much at most (x the stake)
     [SerializeField] private TMP_Text tableText;              // "TARGET 437" / "CLOSEST TO 0" for the whole round. Empty: the strip shows it
     [SerializeField] private Color tableColor = new Color32(0xFF, 0x71, 0x34, 0xFF);
     [SerializeField] private float tableBannerTime = 2.5f;
+    [SerializeField] private ScreenBanner screenBanner;       // full-screen flashing banner for the table type and new acts. Empty: the monitor shows it
     public TableType Table { get; private set; } = TableType.High;
     public int Target { get; private set; }
     private Vector2Int targetRange;
@@ -84,6 +104,23 @@ public class GameController : MonoBehaviour
     [SerializeField] private GameObject equationPanel;   // hide it, like the reward screen does
     [SerializeField] private TMP_Text endStats;
 
+    [Header("Juice")]
+    [SerializeField] private NixieCounter scoreCounter;   // on the score text
+    [SerializeField] private ParticleSystem scoreSparks;   // the Sphere-shaped copy
+    [SerializeField] private float sparkForward = 0.3f;   // how far in front of the score text they burst
+
+    [Header("Reveal")]
+    [SerializeField] private float monitorHold = 1.2f;   // how long the camera lingers on the result before zooming out
+    [SerializeField, Range(0f, 1f)] private float rollThreshold = 0.5f;   // wins at least this big get the nixie roll
+    [SerializeField] private float marginReadTime = 0.2f;   // seconds per token while reading "37 - 24"
+    [SerializeField] private float readPopSize = 170f;      // percent
+    [SerializeField] private float readHoldSize = 125f;     // percent
+    [SerializeField] private AudioClip marginTick;          // optional: a soft tick per token read
+    [SerializeField] private float fastForward = 4f;        // holding Shift or the mouse plays the reveal this much faster
+    [SerializeField] private NixieHealth playerHealthTubes;
+    [SerializeField] private NixieHealth enemyHealthTubes;
+
+
     private const string formUrl = "https://docs.google.com/forms/d/e/1FAIpQLScix26Ts907fGNdApSgtKu10-K0fdspGZps9k1Yjl9vXGlMGg/viewform";
     private const string resultEntry = "entry.2115005332";
     private const string fightEntry = "entry.1084623422";
@@ -91,6 +128,7 @@ public class GameController : MonoBehaviour
     private const string minutesEntry = "entry.522183546";
     private const string diceEntry = "entry.1966468218";
     private const string versionEntry = "entry.173446048";
+    private const string runEntry = "entry.1005792611";   // your new Run ID question
 
     private int score;
     private bool roundEnding;
@@ -100,6 +138,17 @@ public class GameController : MonoBehaviour
 
     public int Score => score;
 
+    // 0..1: how big this result is. Every effect reads this, so one knob tunes them all.
+    private float Intensity(int diff)
+    {
+        if (diff == 0) return 0f;
+        return Mathf.InverseLerp(0f, maxLog, Mathf.Log10((Mathf.Abs(diff) + 1f) / player.Stake));
+    }
+
+    private void Awake()
+    {
+        SchoolOrder = schoolOrder;
+    }
     private void Start()
     {
 #if !UNITY_WEBGL
@@ -113,6 +162,7 @@ public class GameController : MonoBehaviour
         player.OnRelicsChanged += UpdateRelicBar;
         player.OnRelicTriggered += PulseRelic;
         UpdateRelicBar();
+        Telemetry.StartRun();
         StartCoroutine(BeginFight());
     }
 
@@ -124,7 +174,6 @@ public class GameController : MonoBehaviour
     {
         if (side == player) { playerResult = result; playerBust = bust; }
         else { enemyResult = result; enemyBust = bust; }
-        ShowTotal(side, result, bust);
 
         if (playerResult.HasValue && enemyResult.HasValue && !roundEnding)
         {
@@ -134,34 +183,49 @@ public class GameController : MonoBehaviour
 
     private IEnumerator BeginFight()
     {
-        player.InputBlocked = true;   // nobody throws until the table is set (and the target drawn)
+        player.InputBlocked = true;
+        cameraController.SetLook(false);
         SetTableText("");
 
         if (Act < actStarts.Length && Fight == actStarts[Act])   // first fight of a new act
         {
             Act++;
-            strip.Flash($"ACT {Act}", Color.yellow, actBannerTime);
-            yield return new WaitForSeconds(actBannerTime);
+            if (screenBanner != null) yield return screenBanner.Play($"ACT {Act}", "", Color.yellow, actBannerTime);
+            else
+            {
+                strip.Flash($"ACT {Act}", Color.yellow, actBannerTime);
+                yield return new WaitForSeconds(actBannerTime);
+            }
         }
 
         EnemyDefinition def = ladder[Fight - 1];   // Fight starts at 1
         Table = def.table;
         targetRange = def.targetRange;
         enemy.Load(def);
+        OnFightStarted?.Invoke(Fight);
+        if (Traits != null) foreach (EnemyTrait t in Traits) if (t != null) t.OnFightStart(enemy);
         player.ClearTotal();
         player.OnFightStart();
         enemy.SayIntro();
         strip.Flash($"VS {enemy.DisplayName}", Color.red, 3f);
         yield return new WaitForSeconds(introTime);
         scoreText.text = "";
+        if (Traits != null && Traits.Length > 0)
+        {
+            List<string> names = new List<string>();
+            foreach (EnemyTrait t in Traits) if (t != null) names.Add(t.displayName.ToUpper());
+            strip.Flash(string.Join(" · ", names), tableColor, 2.5f);
+            yield return new WaitForSeconds(2f);
+        }
 
         if (Table != TableType.High)
         {
-            strip.Flash(TableBanner(), tableColor, tableBannerTime);
-            yield return new WaitForSeconds(tableBannerTime);
+            yield return TableBannerOnScreen();
             yield return reward.SwapRoutine(player, Table);   // the spare at Low tables, the Pocket Die at both
+            Tutorial.Done("lowtable");
         }
 
+        int carried = 0;
         if (carry > 0)   // Carry the One: last fight's overkill hits this enemy, but never finishes it
         {
             int dealt = Mathf.Min(carry, enemy.Health - 1);
@@ -169,63 +233,48 @@ public class GameController : MonoBehaviour
             if (dealt > 0)
             {
                 enemy.TakeDamage(dealt);
+                carried = dealt;
                 player.TriggerRelic(RelicType.CarryTheOne);
                 strip.Flash($"CARRY THE ONE · {dealt}", tableColor, 2f);
                 yield return new WaitForSeconds(1.5f);
             }
         }
 
-        if (Fight == 1) Tutorial.Hint("throw", "DRAG A DIE AND LET GO TO THROW IT");
+        Telemetry.StartFight(def, player, enemy, Act, carried);
 
-        StartRound();
+        if (Fight == 1 && screenBanner != null)   // the goal, once, before the very first throw
+            yield return screenBanner.Play("BEAT THEIR NUMBER", "THE BIGGER NUMBER WINS THE ROUND", Color.yellow, actBannerTime);
+
+        yield return RoundRoutine();
     }
 
-    // Every round: a Target table draws its number first, then both sides may throw
-    private void StartRound()
+    private IEnumerator RoundRoutine()
     {
-        if (Table == TableType.Target)
+        scoreText.text = "";
+        if (Table == TableType.Target || Table == TableType.Limit)
         {
             Target = Random.Range(targetRange.x, targetRange.y + 1);
-            SetTableText($"TARGET {Target}");
-            if (tableText == null) ShowTargetInScore();   // no Table Text: the big score number shows the target instead
+            Telemetry.SetTarget(Target);
+            SetTableText(Table == TableType.Limit ? $"LIMIT {Target}" : $"TARGET {Target}");
+            if (tableText == null) ShowTargetInScore();
         }
         else if (Table == TableType.Low) SetTableText("CLOSEST TO 0");
         else SetTableText("");
 
+
+        player.InputBlocked = true;
+        cameraController.SetLook(false);
+        yield return rig.MoveTo(enemyView);
+        yield return enemy.TakeTurn();   // the enemy's AI throws its dice, then calls OnEquationComplete
+        WaitUntil wait = new WaitUntil(() => enemyResult.HasValue);
+        yield return wait;
+        if (Traits != null) foreach (EnemyTrait t in Traits) if (t != null) yield return t.AfterEnemyTurn(enemy);
+        yield return new WaitForSeconds(readTime);   
+        yield return rig.MoveTo(tableView);         
+        cameraController.SetLook(true);
         player.InputBlocked = false;
-        enemy.StartTurn();
-    }
-
-    // The score is the biggest, clearest text on the monitor. At a Target table the last round's damage matters less
-    // than what you're aiming for, so it shows the target while you throw (the damage still flashes at round end).
-    private void ShowTargetInScore()
-    {
-        if (scoreFadeRoutine != null) StopCoroutine(scoreFadeRoutine);
-        scoreText.color = tableColor;
-        scoreText.text = $"TARGET {Target}";
-        if (scorePunchRoutine != null) StopCoroutine(scorePunchRoutine);
-        scorePunchRoutine = StartCoroutine(Punch(scoreText.transform, 1.3f, 0.25f, 0f));
-    }
-
-    private string TableBanner()
-    {
-        if (Table == TableType.Low) return "LOW TABLE · CLOSEST TO 0 WINS";
-        return $"TARGET TABLE · {targetRange.x} TO {targetRange.y}";
-    }
-
-    // Use a Table Text: the strip is shared with hints and flashes, so a target shown there gets wiped mid-round
-    private void SetTableText(string text)
-    {
-        if (tableText != null) { tableText.text = text; return; }
-
-        if (!warnedTableText && !string.IsNullOrEmpty(text))
-        {
-            warnedTableText = true;
-            Debug.LogWarning("[Carry the One] GameController > Table Text is empty, so the target goes on the strip, " +
-                             "where hints and flashes wipe it. Add a big text on the monitor and drag it in.");
-        }
-        if (string.IsNullOrEmpty(text)) strip.Clear();
-        else strip.Show(text, tableColor);
+        if (Fight == 1) Tutorial.Hint("throw", "DRAG A DIE AND LET GO TO THROW IT");
+        yield break;
     }
 
     private IEnumerator EndRoundRoutine()
@@ -234,36 +283,49 @@ public class GameController : MonoBehaviour
         player.InputBlocked = true;   // until the next round starts: no grabbing dice during the reward or relic screens
 
         // The table turns both results into scores (bigger is better), the difference is the damage
-        int diff = TableScore(playerResult.Value, playerBust) - TableScore(enemyResult.Value, enemyBust);
-        bool insured = false;
+        int playerScore = TableScore(playerResult.Value, playerBust);
+        int enemyScore = TableScore(enemyResult.Value, enemyBust);
 
-        if (diff < 0)
-        {
-            player.TakeDamage(-diff);
-            insured = player.TryInsurance();   // Insurance: the first knockout leaves you on 25%
-        }
-        else if (diff > 0)
-        {
-            int hpBefore = enemy.Health;
-            enemy.TakeDamage(diff);
-            if (enemy.IsDead && player.HasRelic(RelicType.CarryTheOne)) carry = diff - hpBefore;
-        }
+        if (Traits != null) foreach (EnemyTrait t in Traits) if (t != null) yield return t.BeforeDamage(enemy);
 
+        yield return cameraController.FocusOn(monitorView, 0.45f);
+        yield return enemy.PlayCount(() => cameraController.Kick());       
+        yield return player.PlayCount(() => cameraController.Kick(4f));       
+
+        int diff = playerScore - enemyScore;
+        Telemetry.RoundScored(playerScore, enemyScore);
         score = diff;
-        scoreText.text = diff.ToString();
-        PlayResultFeedback(diff);
-        if (enemy.IsDead) enemy.SayDefeat();
-        else if (diff != 0) enemy.SayTurnResult(diff < 0);   // diff < 0 = the enemy won the turn
-        if (diff > 0)
-        {
-            strip.Flash("YOU WIN", Color.green, timeBetweenRounds);
-            audio.PlayOneShot(enemy.IsDead ? winClip : turnWinClip);
-        }
-        else if (insured) { strip.Flash("INSURANCE PAID OUT!", Color.yellow, timeBetweenRounds); audio.PlayOneShot(loseClip); }
-        else if (diff < 0) { strip.Flash("YOU LOST", Color.red, timeBetweenRounds); audio.PlayOneShot(loseClip); }
-        else { strip.Flash("DRAW", Color.white, timeBetweenRounds); }
+        List<CountStep> margin = MarginSteps(playerScore, enemyScore);  
 
-        yield return new WaitForSeconds(timeBetweenRounds);
+        yield return SwapMonitor(true);
+        yield return RevealResult(diff, margin);          // the show, zoomed in
+
+        enemy.ClearTotal();
+        player.ClearTotal();
+        yield return SwapMonitor(false);                  // equations back, while still close enough to read them
+        yield return cameraController.FocusBack(0.5f);    // zoom out: now the HP tubes are in view
+
+        bool insured = false;
+        yield return Drain(diff, () =>
+        {
+            if (diff < 0)
+            {
+                player.TakeDamage(-diff);
+                insured = player.TryInsurance();   // Insurance: the first knockout leaves you on 25%
+            }
+            else if (diff > 0)
+            {
+                int hpBefore = enemy.Health;
+                enemy.TakeDamage(diff);
+                if (enemy.IsDead && player.HasRelic(RelicType.CarryTheOne)) carry = diff - hpBefore;
+            }
+        });
+
+        if (Traits != null) foreach (EnemyTrait t in Traits) if (t != null) t.OnRoundEnd(enemy, diff < 0);
+        if (diff > 0) strip.Flash("YOU WIN", Color.green, timeBetweenRounds);
+        else if (insured) strip.Flash("INSURANCE PAID OUT!", Color.yellow, timeBetweenRounds);
+        else if (diff < 0) strip.Flash("YOU LOST", Color.red, timeBetweenRounds);
+        else strip.Flash("DRAW", Color.white, timeBetweenRounds);
 
         if (player.IsDead)
         {
@@ -274,7 +336,8 @@ public class GameController : MonoBehaviour
 
         if (enemy.IsDead)
         {
-            player.RevertSwaps();                // your own dice come back before any reward
+            Telemetry.EndFight(true);
+            player.RevertSwaps();
             SetTableText("");
 
             if (Fight == ladder.Length)          // beat the last enemy: no reward screen
@@ -312,11 +375,81 @@ public class GameController : MonoBehaviour
         playerResult = null;
         enemyResult = null;
         roundEnding = false;
-        StartRound();
+        yield return RoundRoutine();
     }
+
+    // The score is the biggest, clearest text on the monitor. At a Target table the last round's damage matters less
+    // than what you're aiming for, so it shows the target while you throw (the damage still flashes at round end).
+    private void ShowTargetInScore()
+    {
+        if (scoreFadeRoutine != null) StopCoroutine(scoreFadeRoutine);
+        scoreText.color = tableColor;
+        scoreText.text = Table == TableType.Limit ? $"LIMIT {Target}" : $"TARGET {Target}";
+        if (scorePunchRoutine != null) StopCoroutine(scorePunchRoutine);
+        scorePunchRoutine = StartCoroutine(Punch(scoreText.transform, 1.3f, 0.25f, 0f));
+    }
+
+    // The table type flashes on the full-screen banner (or, without one, big on the monitor's score text)
+    private IEnumerator TableBannerOnScreen()
+    {
+        string title, rule;
+        switch (Table)
+        {
+            case TableType.Low: title = "LOW TABLE"; rule = "CLOSEST TO 0 WINS"; break;
+            case TableType.Limit: title = "LIMIT TABLE"; rule = $"DON'T GO OVER · {targetRange.x} TO {targetRange.y}"; break;
+            default: title = "TARGET TABLE"; rule = $"TARGET {targetRange.x} TO {targetRange.y}"; break;
+        }
+        if (screenBanner != null)                       // the full-screen banner when there is one...
+        {
+            if (audio != null && turnWinClip != null) audio.PlayOneShot(turnWinClip, 0.6f);
+            yield return screenBanner.Play(title, rule, tableColor, tableBannerTime);
+            yield break;                              
+        }
+
+        yield return SwapMonitor(true);
+        if (scoreFadeRoutine != null) StopCoroutine(scoreFadeRoutine);
+        scoreText.text = $"{title}\n<size=50%>{rule}</size>";
+        if (scorePunchRoutine != null) StopCoroutine(scorePunchRoutine);
+        scorePunchRoutine = StartCoroutine(Punch(scoreText.transform, 1.4f, 0.3f, 0f));
+        if (audio != null && turnWinClip != null) audio.PlayOneShot(turnWinClip, 0.6f);
+
+        // Blinks a few times like a sign switching on, then holds
+        const int blinks = 3;
+        const float blinkTime = 0.12f;
+        for (int i = 0; i < blinks; i++)
+        {
+            scoreText.color = tableColor;
+            yield return new WaitForSeconds(blinkTime);
+            scoreText.color = Color.clear;
+            yield return new WaitForSeconds(blinkTime);
+        }
+        scoreText.color = tableColor;
+        yield return new WaitForSeconds(Mathf.Max(0.5f, tableBannerTime - blinks * blinkTime * 2f));
+        scoreText.text = "";
+        scoreText.color = Color.white;
+        yield return SwapMonitor(false);                // equations back
+    }
+
+    // Use a Table Text: the strip is shared with hints and flashes, so a target shown there gets wiped mid-round
+    private void SetTableText(string text)
+    {
+        if (tableText != null) { tableText.text = text; return; }
+
+        if (!warnedTableText && !string.IsNullOrEmpty(text))
+        {
+            warnedTableText = true;
+            Debug.LogWarning("[Carry the One] GameController > Table Text is empty, so the target goes on the strip, " +
+                             "where hints and flashes wipe it. Add a big text on the monitor and drag it in.");
+        }
+        if (string.IsNullOrEmpty(text)) strip.Clear();
+        else strip.Show(text, tableColor);
+    }
+
+
 
     private IEnumerator EndRun(bool won)
     {
+        Telemetry.EndRun(won);
         equationPanel.SetActive(false);
         endPanel.SetActive(true);
         endStats.text = won ? $"ALL {ladder.Length} FIGHTS CLEARED"
@@ -335,7 +468,7 @@ public class GameController : MonoBehaviour
 
     public void OpenSurvey() => Application.OpenURL(BuildSurveyUrl());
     public void PlayAgain() => SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-    public void ToMenu() => SceneManager.LoadScene("MainMenu");
+    public void ToMenu() { Telemetry.AbandonRun(); SceneManager.LoadScene("MainMenu"); }
 
     private string BuildSurveyUrl()
     {
@@ -350,7 +483,8 @@ public class GameController : MonoBehaviour
             + Field(beatenEntry, beatenBy)
             + Field(minutesEntry, minutes.ToString())
             + Field(diceEntry, DescribeDice())
-            + Field(versionEntry, Application.version);
+            + Field(versionEntry, Application.version)
+            + Field(runEntry, Telemetry.LastRunId);
 
         Debug.Log("Survey URL: " + url);
         return url;
@@ -374,29 +508,91 @@ public class GameController : MonoBehaviour
     }
 
     // ---------- Maths (static: anyone can use these, player or enemy) ----------
-
-    public static int Evaluate(List<FaceDefinition> faces)
+    public class CountStep
     {
-        int total = 0;
-        int currentNumber = 0;
-        Operator pendingOp = Operator.Add;
+        public List<int> numbers;
+        public List<Operator> ops;
+        public int next;
+    }
 
+    public static int Evaluate(List<FaceDefinition> faces) => Count(faces, null);
+    public static List<CountStep> CountSteps(List<FaceDefinition> faces)
+    {
+        List<CountStep> steps = new List<CountStep>();
+        Count(faces, steps);
+        return steps;
+    }
+
+    // The ONE place maths happens. Evaluate and the count animation both run this, so they can never disagree.
+    private static int Count(List<FaceDefinition> faces, List<CountStep> record)
+    {
+        // 1. Faces → two lists. "5 + 9 0 ÷ 5" becomes numbers [5, 90, 5] and ops [+, ÷]
+        List<int> numbers = new List<int>();
+        List<Operator> ops = new List<Operator>();
+        int current = 0;
         foreach (FaceDefinition face in faces)
         {
             if (face.type == FaceType.Number)
             {
-                currentNumber = (currentNumber * 10) + face.number;
+                current = current * 10 + face.number;   // digits next to each other join: 9 then 0 → 90
             }
             else
             {
-                total = Apply(pendingOp, total, currentNumber);
-                pendingOp = face.op;
-                currentNumber = 0;
+                numbers.Add(current);   // an operator ends the number before it
+                ops.Add(face.op);
+                current = 0;
             }
         }
+        numbers.Add(current);   // the last number has no operator after it to end it
 
-        total = Apply(pendingOp, total, currentNumber);
-        return total;
+        // 2. Do one operator at a time until none are left
+        while (ops.Count > 0)
+        {
+            int k = NextOperator(ops);
+            if (record != null)   // copies: the lists keep changing, a snapshot must not
+                record.Add(new CountStep { numbers = new List<int>(numbers), ops = new List<Operator>(ops), next = k });
+
+            numbers[k] = Apply(ops[k], numbers[k], numbers[k + 1]);   // 90 ÷ 5 → 18, written where the 90 was
+            numbers.RemoveAt(k + 1);                                 // the 5 is used up
+            ops.RemoveAt(k);                                         // so is the ÷
+        }
+
+        if (record != null)
+            record.Add(new CountStep { numbers = new List<int>(numbers), ops = new List<Operator>(ops), next = -1 });
+        return numbers[0];
+    }
+
+    // THE RULE. This is the only line that differs between left to right and school maths.
+    private static int NextOperator(List<Operator> ops)
+    {
+        if (!SchoolOrder) return 0;   // always the leftmost
+        for (int i = 0; i < ops.Count; i++)
+        {
+            if (ops[i] == Operator.Multiply || ops[i] == Operator.Divide || ops[i] == Operator.Modulus) return i;
+        }
+        return 0;   // no × ÷ % left: the leftmost + or −
+    }
+
+    // "5+90÷5", with the part about to be counted coloured, and one token (focus) drawn bigger.
+    // Tokens count in reading order: number 0, op 0, number 1, op 1... so number i is token 2i, operator i is 2i+1.
+    public static string StepText(CountStep step, int focus = -1, float focusSize = 150f, string highlight = "#FFD54A")
+    {
+        StringBuilder text = new StringBuilder();
+        int token = 0;
+        for (int i = 0; i < step.numbers.Count; i++)
+        {
+            if (i == step.next) text.Append($"<color={highlight}>");
+            AppendToken(text, step.numbers[i].ToString(), token++ == focus, focusSize);
+            if (step.next >= 0 && i == step.next + 1) text.Append("</color>");
+            if (i < step.ops.Count) AppendToken(text, OpSymbol(step.ops[i]), token++ == focus, focusSize);
+        }
+        return text.ToString();
+    }
+
+    private static void AppendToken(StringBuilder text, string token, bool big, float size)
+    {
+        if (big) text.Append($"<size={size:0}%>{token}</size>");
+        else text.Append(token);
     }
 
     public static int Apply(Operator op, int a, int b)
@@ -453,6 +649,8 @@ public class GameController : MonoBehaviour
                 return -Mathf.Min(Mathf.Abs(result) + bust, lowCap) * player.Stake;
             case TableType.Target:
                 return -(Mathf.Abs(result - Target) + bust);
+            case TableType.Limit:
+                return (result > Target ? 0 : result) - bust;  
             default:
                 return result - bust;
         }
@@ -475,25 +673,7 @@ public class GameController : MonoBehaviour
     // How busts show in the equation: taken off at a High table, added to the distance at the others
     public string BustText(int penalty)
     {
-        return Table == TableType.High ? $" - {penalty}" : $" · BUST +{penalty}";
-    }
-
-    // The faint total that sits to the right of each finished equation. At Low and Target tables the distance
-    // is the number that decides the round, so it goes in the brighter accent part: "= 425 · 12 OFF".
-    private void ShowTotal(DiceSide side, int result, int bust)
-    {
-        switch (Table)
-        {
-            case TableType.Low:
-                side.ShowTotal($"={result}", bust > 0 ? $"{Mathf.Min(Mathf.Abs(result) + bust, lowCap)} OFF" : "");
-                break;
-            case TableType.Target:
-                side.ShowTotal($"={result}", $"{Mathf.Abs(result - Target) + bust} OFF");
-                break;
-            default:
-                side.ShowTotal($"={result - bust}");
-                break;
-        }
+        return Table == TableType.High || Table == TableType.Limit ? $" - {penalty}" : $" · BUST +{penalty}";   
     }
 
     // ---------- Relics ----------
@@ -664,16 +844,21 @@ public class GameController : MonoBehaviour
         float punchSize;
         float shake;
 
-        if (result <= 0)
+        if (result < 0)            // a loss: red, a small inward punch
         {
-            flashColor = Color.gray;
+            flashColor = loseColor;
             punchSize = 0.8f;
             shake = 0f;
         }
-        else
+        else if (result == 0)      // a draw: grey, barely a twitch
         {
-            // Measured against the stake, so a 500 hit in act 2 feels like a 50 in act 1 (instead of every act 3 hit maxing out)
-            float intensity = Mathf.InverseLerp(0f, maxLog, Mathf.Log10((result + 1f) / player.Stake));
+            flashColor = Color.gray;
+            punchSize = 0.9f;
+            shake = 0f;
+        }
+        else                       // a win: the gradient, bigger with intensity
+        {
+            float intensity = Intensity(result);
             flashColor = scoreGradient.Evaluate(intensity);
             shake = intensity > 0.5f ? intensity * maxShake : 0f;
             punchSize = Mathf.Lerp(1.1f, 1.6f, intensity);
@@ -687,6 +872,79 @@ public class GameController : MonoBehaviour
         if (scoreFadeRoutine != null) StopCoroutine(scoreFadeRoutine);
         scoreFadeRoutine = StartCoroutine(FadeColor(scoreText, flashColor, Color.white, 1f, 0.25f));
     }
+
+    // "37 - 24" → "13": the gap between the two results, as one last sum. Always winner minus loser, so it's never negative.
+    // High: the two scores. Low and Target: the two DISTANCES (the loser's is bigger), and a Low table multiplies by the stake.
+    private List<CountStep> MarginSteps(int playerScore, int enemyScore)
+    {
+        int a, b, multiplier = 1;
+        if (Table == TableType.High || Table == TableType.Limit)
+        {
+            a = Mathf.Max(playerScore, enemyScore);
+            b = Mathf.Min(playerScore, enemyScore);
+        }
+        else
+        {
+            int stake = Table == TableType.Low ? player.Stake : 1;
+            int playerDistance = -playerScore / stake;   // TableScore made these negative (and x stake at Low): undo that
+            int enemyDistance = -enemyScore / stake;
+            a = Mathf.Max(playerDistance, enemyDistance);
+            b = Mathf.Min(playerDistance, enemyDistance);
+            multiplier = stake;
+        }
+
+        List<CountStep> steps = new List<CountStep>();
+        steps.Add(new CountStep { numbers = new List<int> { a, b }, ops = new List<Operator> { Operator.Subtract }, next = 0 });
+        int margin = a - b;
+        if (multiplier > 1)
+            steps.Add(new CountStep { numbers = new List<int> { margin, multiplier }, ops = new List<Operator> { Operator.Multiply }, next = 0 });
+        steps.Add(new CountStep { numbers = new List<int> { margin * multiplier }, ops = new List<Operator>(), next = -1 });
+        return steps;
+    }
+
+    // Reads the margin token by token on the score text, then shows the answer (big wins: the nixie roll)
+    private IEnumerator PlayMargin(List<CountStep> steps, int amount, float intensity, bool roll)
+    {
+        if (scoreFadeRoutine != null) StopCoroutine(scoreFadeRoutine);
+        scoreText.color = Color.white;
+
+        for (int i = 0; i < steps.Count; i++)
+        {
+            CountStep step = steps[i];
+            if (step.next < 0)   // the answer
+            {
+                if (roll && scoreCounter != null) yield return scoreCounter.Roll(amount, intensity);
+                else scoreText.text = amount.ToString();
+                yield break;
+            }
+
+            if (i > 0) StartCoroutine(Pop(scoreText.transform, Vector3.one, 1.25f, 0.2f));   // "× stake": a small collapse
+
+            int first = step.next * 2;
+            for (int t = first; t <= first + 2; t++)
+            {
+                if (marginTick != null) { audio.pitch = 0.9f + (t - first) * 0.1f; audio.PlayOneShot(marginTick, 0.7f); }
+                yield return ReadToken(step, t);
+            }
+        }
+    }
+
+    private IEnumerator ReadToken(CountStep step, int token)
+    {
+        float t = 0f;
+        while (t < marginReadTime)
+        {
+            float k = t / marginReadTime;
+            k = 1f - (1f - k) * (1f - k);
+            scoreText.text = StepText(step, token, Mathf.Lerp(readPopSize, readHoldSize, k));
+            t += Time.deltaTime * RevealSpeed;
+            yield return null;
+        }
+    }
+
+    private float RevealSpeed =>
+        (Keyboard.current != null && Keyboard.current.shiftKey.isPressed) ||
+        (Mouse.current != null && Mouse.current.leftButton.isPressed) ? fastForward : 1f;
 
     // ---------- Reusable juice (static: any MonoBehaviour can StartCoroutine these) ----------
 
@@ -710,6 +968,27 @@ public class GameController : MonoBehaviour
         target.localScale = Vector3.one;
         target.localPosition = startingPosition;
     }
+    public static IEnumerator Pop(Transform target, Vector3 baseScale, float size, float duration, float wobbles = 1.5f)
+    {
+        for (float t = 0f; t < duration; t += Time.deltaTime)
+        {
+            float k = t / duration;   // 0 → 1 over the pop
+                                      // cos swings 1 → -1 → 1 (big, squashed, big...), and (1-k)² fades the swing out
+            float spring = Mathf.Cos(k * wobbles * Mathf.PI * 2f) * (1f - k) * (1f - k);
+            target.localScale = baseScale * (1f + (size - 1f) * spring);
+            yield return null;
+        }
+        target.localScale = baseScale;
+    }
+
+    // Freezes the game for a moment. Realtime, because WaitForSeconds itself would freeze too.
+    public static IEnumerator HitStop(float seconds)
+    {
+        if (seconds <= 0f) yield break;
+        Time.timeScale = 0f;
+        yield return new WaitForSecondsRealtime(seconds);
+        Time.timeScale = 1f;
+    }
 
     public static IEnumerator FadeColor(TMP_Text text, Color from, Color to, float delay, float duration)
     {
@@ -725,5 +1004,88 @@ public class GameController : MonoBehaviour
         }
 
         text.color = to;
+    }
+
+    private IEnumerator RevealResult(int diff, List<CountStep> margin)
+    {
+        float intensity = Intensity(diff);
+        bool roll = diff > 0 && intensity >= rollThreshold;
+
+        // ---- 1. ANTICIPATION ----
+        yield return PlayMargin(margin, Mathf.Abs(diff), intensity, roll);
+
+        // ---- 2. IMPACT: the number lands. No damage yet: the HP tubes aren't on screen ----
+        PlayResultFeedback(diff);
+        if (diff > 0)
+        {
+            if (intensity > 0.6f) StartCoroutine(HitStop(0.1f));
+            cameraController.Kick(Mathf.Lerp(2f, 8f, intensity));
+            ScoreSparks(Mathf.RoundToInt(Mathf.Lerp(10, 80, intensity)));
+            audio.pitch = Mathf.Lerp(0.9f, 1.2f, intensity);
+            audio.PlayOneShot(turnWinClip);
+            CameraShake.Instance?.AddTrauma(intensity * 0.8f);
+        }
+        else if (diff < 0)
+        {
+            audio.pitch = Mathf.Lerp(0.9f, 0.6f, intensity);
+            audio.PlayOneShot(loseClip);
+            cameraController.Kick(Mathf.Lerp(1f, 4f, intensity));
+        }
+
+        // ---- 3. LINGER on the monitor ----
+        yield return new WaitForSeconds(monitorHold);
+        audio.pitch = 1f;
+    }
+
+    // The consequence: the damage lands while the HP tubes are on screen, they count down, and the kill waits for 0
+    private IEnumerator Drain(int diff, System.Action applyDamage)
+    {
+        applyDamage?.Invoke();   // the tubes start ticking right now
+
+        NixieHealth tubes = diff > 0 ? enemyHealthTubes : diff < 0 ? playerHealthTubes : null;
+        if (tubes != null) yield return new WaitWhile(() => tubes.Ticking);
+
+        if (enemy.IsDead)
+        {
+            StartCoroutine(HitStop(0.15f));
+            cameraController.Kick(10f);
+            CameraShake.Instance?.AddTrauma(1f);
+            audio.PlayOneShot(winClip);
+            enemy.SayDefeat();
+        }
+        else if (diff != 0) enemy.SayTurnResult(diff < 0);
+
+        yield return new WaitForSeconds(timeBetweenRounds);
+    }
+
+    // A burst of sparks right in front of the score
+    private void ScoreSparks(int count)
+    {
+        if (scoreSparks == null || count <= 0) return;
+        if (!scoreSparks.gameObject.scene.IsValid()) scoreSparks = Instantiate(scoreSparks);
+
+        // camera.forward points INTO the scene, so minus it points back toward the camera.
+        // Bursting a little in front of the text keeps the sparks from hiding behind the monitor's glass or bezel.
+        Vector3 towardCamera = -Camera.main.transform.forward;
+        scoreSparks.transform.position = scoreText.transform.position + towardCamera * sparkForward;
+        scoreSparks.Emit(count);
+    }
+
+    // Fades the equations and the score at the same time, in opposite directions.
+    // showScore = true: equations out, score in. false: the other way round.
+    private IEnumerator SwapMonitor(bool showScore)
+    {
+        float eqFrom = equationsGroup.alpha, eqTo = showScore ? 0f : 1f;
+        float scFrom = scoreText.alpha, scTo = showScore ? 1f : 0f;
+
+        for (float t = 0f; t < swapTime; t += Time.unscaledDeltaTime)
+        {
+            float k = Mathf.SmoothStep(0f, 1f, t / swapTime);
+            equationsGroup.alpha = Mathf.Lerp(eqFrom, eqTo, k);
+            scoreText.alpha = Mathf.Lerp(scFrom, scTo, k);
+            yield return null;
+        }
+        equationsGroup.alpha = eqTo;
+        scoreText.alpha = scTo;
     }
 }

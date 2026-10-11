@@ -46,6 +46,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FaceView
   label: {fileID: 4555376054279163073}
+  baseColor: {r: 1, g: 1, b: 1, a: 1}
+  glowColor: {r: 1.5, g: 0.90000004, b: 0.3, a: 1.5}
+  glowMaterialIndex: -1
 --- !u!1 &6637038289190315967
 GameObject:
   m_ObjectHideFlags: 0
@@ -108,7 +111,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2795009122412344206, guid: a88c9d191fc9a73428237047c4a96d89, type: 2}
+  - {fileID: -3125741088672433362, guid: ab49c1a6a8e8a8441850b3e31a9350b0, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -154,8 +157,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: 1
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: a88c9d191fc9a73428237047c4a96d89, type: 2}
-  m_sharedMaterial: {fileID: 2795009122412344206, guid: a88c9d191fc9a73428237047c4a96d89, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: ab49c1a6a8e8a8441850b3e31a9350b0, type: 2}
+  m_sharedMaterial: {fileID: -3125741088672433362, guid: ab49c1a6a8e8a8441850b3e31a9350b0, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []

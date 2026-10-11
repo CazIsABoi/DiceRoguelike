@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Flipside
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: High Roller
-  maxHP: 4500
+  maxHP: 2800
   dice:
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
@@ -22,6 +22,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 4d7174365b367844d8a1b561e22a5b15, type: 2}
   layout: {fileID: 11400000, guid: fde4265c052323147bc92dc480ce3f1a, type: 2}
   brain: 0
+  traits: []
   throwAttempts: 1
   blunderChance: 0
   rethrowBelow: 2
@@ -32,6 +33,13 @@ MonoBehaviour:
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Head or tails? Both.
+  rerollLines:
+  - Flip it.
+  keepLines:
+  - Heads.
+  - Tails.
+  - Now you see it.
+  - Both sides win.
   winLines:
   - Heads, I win.
   - Flip! Multiplied!

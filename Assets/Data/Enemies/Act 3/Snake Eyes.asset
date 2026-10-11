@@ -13,25 +13,35 @@ MonoBehaviour:
   m_Name: Snake Eyes
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Snake Eyes
-  maxHP: 20000
+  maxHP: 5500
   dice:
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
-  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
-  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   - {fileID: 11400000, guid: dd850c493094bb9428f807fed21cde5f, type: 2}
+  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
+  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   layout: {fileID: 11400000, guid: eece12ddfbc84134e98c36c41abfc8fa, type: 2}
-  brain: 1
+  brain: 2
+  traits:
+  - {fileID: 11400000, guid: 98e32f2de1581a2409e788d30de41077, type: 2}
   throwAttempts: 2
   blunderChance: 0
   rethrowBelow: 5
-  minGain: 2
+  minGain: 300
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
   table: 0
   targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Let'sss play long.
+  rerollLines:
+  - Sss. No.
+  - Shed that one.
+  - Agan, little mouse.
+  keepLines:
+  - Sss. Perfect
+  - Snake eyes.
+  - Coiled.
   winLines:
   - Ssslow and sssteady.
   - Hundredsss.

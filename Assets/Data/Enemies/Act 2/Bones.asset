@@ -13,14 +13,15 @@ MonoBehaviour:
   m_Name: Bones
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Bones
-  maxHP: 100
+  maxHP: 83
   dice:
   - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
   - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
-  - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
   - {fileID: 11400000, guid: fcb716d0f675a204c980691f47e48693, type: 2}
+  - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
   layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
   brain: 2
+  traits: []
   throwAttempts: 2
   blunderChance: 0
   rethrowBelow: 2
@@ -31,6 +32,14 @@ MonoBehaviour:
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Bones. Real bone. Old school.
+  rerollLines:
+  - "These old bones say no.\u201D"
+  - "Rattle \u2019em again."
+  - Bah. Again.
+  keepLines:
+  - Close enough to dust.
+  - own to the bone.
+  - Heh. Nothing.
   winLines:
   - Rattled you, eh?
   - Old bones, new tricks.

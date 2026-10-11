@@ -15,14 +15,29 @@ public class EnemyController : DiceSide
     public string DisplayName => enemy.displayName;
     private Coroutine throwRoutine;
     [SerializeField] private DialogueDisplay dialogue;
-
-    // Anything can listen to this later (a speech bubble, a log panel...)
     public event System.Action<string> OnThought;
+    public int BonusRolls { get; set; }    // Hot Hand: extra rolls per die, reset every fight
+    public GameObject Cup { get; set; }    // Poker Face: the cup currently on the table
+    public void Announce(string line) { if (!string.IsNullOrEmpty(line)) Say(line); }   // traits talk through his dialogue
+
+    [Header("Slam")]
+    [SerializeField] private Transform[] landSpots;          // one per die, on the enemy's felt
+    [SerializeField] private ParticleSystem dust;
+    [SerializeField] private AudioSource slamSource;
+    [SerializeField] private AudioClip[] slamSounds;
+    [SerializeField] private float liftHeight = 0.6f, liftTime = 0.12f, hangTime = 0.15f, dropTime = 0.08f;
+    [SerializeField] private float slamSpin = 900f;          // degrees per second while it's in the air
+    [SerializeField] private float thinkTime = 0.5f;         // the pause before he rerolls, so you can read his line
+    private readonly Dictionary<Die, int> rollsLeft = new Dictionary<Die, int>();
+    public event System.Action OnSlam;
+
+
 
     // Start: spawn enemy.dice, spawn slots from enemy.layout.pattern
 
     public void Load(EnemyDefinition def)
     {
+        if (Cup != null) Destroy(Cup);
         if (throwRoutine != null) StopCoroutine(throwRoutine);
         DestroyDice();
         landedDice.Clear();
@@ -42,7 +57,7 @@ public class EnemyController : DiceSide
         }
         Throw();
     }
-
+    // ---------- Enemy Turn ----------
     private IEnumerator ThrowRoutine()
     {
         for (int i = 0; i < spawnedDice.Length; i++)
@@ -78,6 +93,148 @@ public class EnemyController : DiceSide
     {
         if (throwRoutine != null) StopCoroutine(throwRoutine);
         throwRoutine = StartCoroutine(ThrowRoutine());
+    }
+
+    public IEnumerator TakeTurn()
+    {
+        // 1 + 2: every die gets its rolls, then one slam each. The first slam IS the first roll, so it costs one.
+        rollsLeft.Clear();
+        foreach (Die d in spawnedDice)
+        {
+            rollsLeft[d] = throwAttempts + BonusRolls;
+            yield return Slam(d, RollFace(d), LandSpot(d));
+            rollsLeft[d]--;
+        }
+
+        // 3: everything is on the felt. Look at it and decide what to roll again.
+        landedDice = new List<Die>(spawnedDice);
+        List<Die> rerolls = ChooseRerolls();
+
+
+        // 4: as long as he wants another go: say so, pause, slam those dice, then look again
+        while (rerolls.Count > 0)
+        {
+            Mutter(enemy.rerollLines);
+            yield return new WaitForSeconds(thinkTime);
+            foreach (Die d in rerolls)
+            {
+                yield return Slam(d, RollFace(d), LandSpot(d));
+                rollsLeft[d]--;
+            }
+            rerolls = ChooseRerolls();   // ← the board changed, so decide again from scratch
+        }
+
+        // 5: happy (or out of rolls): place everything
+        Mutter(enemy.keepLines);
+        PlaceAll();
+        landedDice.Clear();
+    }
+
+    private IEnumerator Slam(Die die, int faceIndex, Vector3 landAt)
+    {
+        Transform t = die.transform;
+        die.GetComponent<DiceController>().HandControl();   // physics off: from here the enemy's "hand" moves it
+
+        // Where it ends: socket faceIndex pointing straight up (same maths as Straighten), turned randomly around up
+        Transform socket = die.GetSocket(faceIndex);
+        Quaternion faceUp = Quaternion.FromToRotation(socket.up, Vector3.up) * t.rotation;
+        Quaternion endRot = Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up) * faceUp;
+
+        // landAt is ON the felt. The die's centre sits half a die higher (centre to face, like MoveRoutine's restHeight).
+        float half = Vector3.Distance(socket.position, t.position);
+        Vector3 restPos = landAt + Vector3.up * half;
+        Vector3 highPos = restPos + Vector3.up * liftHeight;
+        Vector3 spinAxis = Random.onUnitSphere;
+
+        // a. Lift: ease OUT (fast, then slow), spinning
+        Vector3 from = t.position;
+        for (float time = 0f; time < liftTime; time += Time.deltaTime)
+        {
+            float k = time / liftTime;
+            k = 1f - (1f - k) * (1f - k);
+            t.position = Vector3.Lerp(from, highPos, k);
+            t.Rotate(spinAxis, slamSpin * Time.deltaTime, Space.World);
+            yield return null;
+        }
+
+        // b. Hang: keeps spinning in the air
+        for (float time = 0f; time < hangTime; time += Time.deltaTime)
+        {
+            t.position = highPos;
+            t.Rotate(spinAxis, slamSpin * Time.deltaTime, Space.World);
+            yield return null;
+        }
+
+        // c. Drop: ease IN (slow, then fast), turning into the final face on the way down
+        Quaternion spun = t.rotation;
+        for (float time = 0f; time < dropTime; time += Time.deltaTime)
+        {
+            float k = time / dropTime;
+            k = k * k;
+            t.SetPositionAndRotation(Vector3.Lerp(highPos, restPos, k), Quaternion.Slerp(spun, endRot, k));
+            yield return null;
+        }
+        t.SetPositionAndRotation(restPos, endRot);
+
+        // d. Impact
+        if (dust != null)
+        {
+            dust.transform.position = landAt;
+            dust.Emit(20);
+        }
+        if (slamSource != null && slamSounds != null)
+        {
+            slamSource.pitch = Random.Range(0.9f, 1.1f);
+            slamSource.PlayOneShot(slamSounds[Random.Range(0, slamSounds.Length)]);
+        }
+        StartCoroutine(GameController.Pop(t, t.localScale, 1.15f, 0.2f));   // a little squash on landing
+        OnSlam?.Invoke();
+    }
+
+    // A fair die: every side equally likely. Blank faces count, they're real sides.
+    private int RollFace(Die die) => Random.Range(0, die.GetCurrentFaces().Length);
+
+    // Where die number i lands: its own spot, so the dice don't slam into each other
+    private Vector3 LandSpot(Die die)
+    {
+        int i = System.Array.IndexOf(spawnedDice, die);
+        bool hasSpot = landSpots != null && i >= 0 && i < landSpots.Length && landSpots[i] != null;
+        Vector3 spot = hasSpot ? landSpots[i].position : die.GetComponent<DiceController>().HomePosition;
+
+        Collider felt = GroundCollider;
+        if (felt != null && felt.Raycast(new Ray(spot + Vector3.up * 3f, Vector3.down), out RaycastHit hit, 10f))
+        {
+            spot.y = hit.point.y;
+        }
+        return spot;
+    }
+
+    private void Mutter(string[] lines)
+    {
+        if (lines == null || lines.Length == 0) return;
+        dialogue.SayNow(lines[Random.Range(0, lines.Length)]);   
+    }
+
+    private List<Die> ChooseRerolls()
+    {
+        List<Die> picks = new List<Die>();
+        switch (brain)
+        {
+            case EnemyBrain.Greedy:
+                foreach (Die d in landedDice)
+                {
+                    if (rollsLeft[d] > 0 && WantsRethrow(d)) picks.Add(d);   // every bad face he can still afford
+                }
+                break;
+
+            case EnemyBrain.Calculating:
+                Die best = ChooseDieToRethrow();   // the one reroll worth the risk, or null
+                if (best != null) picks.Add(best);
+                break;
+
+                // Impulsive: takes whatever he gets, never rerolls
+        }
+        return picks;
     }
 
     // ---------- Thinking out loud ----------
@@ -211,6 +368,9 @@ public class EnemyController : DiceSide
                     PlaceInSlot(best[i], diceSlots[i]);
                 }
                 break;
+            default:   // Impulsive: first free slot, in the order they landed
+                foreach (Die d in landedDice) base.MoveDiceToSlot(d);
+                break;
         }
     }
 
@@ -244,7 +404,7 @@ public class EnemyController : DiceSide
 
         foreach (Die die in landedDice)
         {
-            if (die.GetComponent<DiceController>().GetThrowAttempts() <= 0) continue;
+            if (rollsLeft[die] <= 0) continue;
 
             FaceDefinition[] faces = die.GetCurrentFaces();
 

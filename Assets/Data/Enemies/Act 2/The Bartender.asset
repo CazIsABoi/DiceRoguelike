@@ -13,24 +13,32 @@ MonoBehaviour:
   m_Name: The Bartender
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: The Bartender
-  maxHP: 1800
+  maxHP: 390
   dice:
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
-  - {fileID: 11400000, guid: 370afdbc6d803c247a5c146d3639b096, type: 2}
-  layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
-  brain: 1
+  layout: {fileID: 11400000, guid: eece12ddfbc84134e98c36c41abfc8fa, type: 2}
+  brain: 2
+  traits: []
   throwAttempts: 2
   blunderChance: 0
   rethrowBelow: 7
-  minGain: 2
+  minGain: 100
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
-  table: 0
-  targetRange: {x: 10, y: 40}
+  table: 3
+  targetRange: {x: 200, y: 600}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: What'll it be? On the rocks?
+  rerollLines:
+  - Overpoured. Again.
+  - Too much. Let me redo it.
+  - Not to the line.
+  keepLines:
+  - Right to the line.
+  - Know your limit.
+  - Last call.
   winLines:
   - Last call for you.
   - That one's on the house.

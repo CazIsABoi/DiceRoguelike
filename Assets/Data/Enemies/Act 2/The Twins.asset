@@ -13,12 +13,13 @@ MonoBehaviour:
   m_Name: The Twins
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: The Twins
-  maxHP: 900
+  maxHP: 520
   dice:
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   layout: {fileID: 11400000, guid: 02759a58ef7998e40bddbeec4cc3ade3, type: 2}
   brain: 0
+  traits: []
   throwAttempts: 1
   blunderChance: 0
   rethrowBelow: 2
@@ -29,6 +30,13 @@ MonoBehaviour:
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: We're two. You're one.
+  rerollLines:
+  - Do-ove!
+  keepLines:
+  - We did it.
+  - Together!
+  - Our number!
+  - Ta-da!
   winLines:
   - Two heads are better!
   - Double Digits!

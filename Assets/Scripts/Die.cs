@@ -12,6 +12,7 @@ public class Die : MonoBehaviour
     [SerializeField] private FaceDefinition blankFace; // For empty sockets
     private FaceDefinition[] currentFaces;
     private FaceView[] spawnedFaces;
+    public Transform GetSocket(int index) => sockets[index];
 
     [Header("Face Swap")]
     [SerializeField] private float flyForce = 2f;

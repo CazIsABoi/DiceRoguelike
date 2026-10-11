@@ -350,6 +350,10 @@ MonoBehaviour:
   leftClick: {fileID: -5030714410365570689, guid: 0125415ae5945e04d9bd22af7861c4a7, type: 3}
   rightClick: {fileID: -824309843059730427, guid: 0125415ae5945e04d9bd22af7861c4a7, type: 3}
   mousePos: {fileID: 1671029056690863057, guid: 0125415ae5945e04d9bd22af7861c4a7, type: 3}
+  hoverHeight: 0.8
+  bobHeight: 0.06
+  bobSpeed: 2.5
+  spinSpeed: 120
   liftHeight: 3
   followSpeed: 15
   holdSpin: 3
@@ -365,12 +369,18 @@ MonoBehaviour:
   settleRampTime: 0.7
   confirmBestFace: 1
   confirmWindow: 2.5
+  gravityScale: 2.5
+  settleTimeout: 4
   flatThreshold: 0.95
   straightenLift: 0.2
   straightenTime: 0.15
-  ThrowAttempts: 2
-  killHeight: -1
+  ThrowAttempts: 3
+  fallDepth: 1
+  logRespawns: 1
   respawnPopTime: 0.2
+  shakeFullSpeed: 6
+  shakeIdleVolume: 0.15
+  shakeFade: 10
 --- !u!114 &4062360055529501214
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -9,6 +9,14 @@ public class DiceController : MonoBehaviour
     [SerializeField] private InputActionReference rightClick;
     [SerializeField] private InputActionReference mousePos;
 
+    [Header("Hover")]
+    [SerializeField] private float hoverHeight = 0.8f;   // above its spawn spot
+    [SerializeField] private float bobHeight = 0.06f;
+    [SerializeField] private float bobSpeed = 2.5f;
+    [SerializeField] private float spinSpeed = 120f;     // degrees per second
+    private Vector3 spinAxis;
+    private float bobPhase;                              // so the dice don't all bob in step
+
     [Header("Holding")]
     [SerializeField] private float liftHeight = 1.5f;
     [SerializeField] private float followSpeed = 15f;
@@ -25,6 +33,7 @@ public class DiceController : MonoBehaviour
     private Vector3 spinDirection;
     private Coroutine rotationRoutine;
     private Transform respawnPoint;
+    private Vector3 spawnOffset;                            // each die gets its own spot next to the spawn point (DiceSide hands these out)
     private Coroutine respawning;
 
     // The last few drag positions, so the throw uses how fast you were moving the mouse (not where the die lagged to)
@@ -48,14 +57,20 @@ public class DiceController : MonoBehaviour
     private float confirmUntil = -1f;
     private bool hasLanded;                                 // thrown and settled at least once this round
 
+    [Header("Weight")]
+    [SerializeField] private float gravityScale = 2.5f;   // 1 = Unity's normal gravity
+
     [Header("Landing")]
+    [SerializeField] private float settleTimeout = 4f;   // not settled after this = stuck somewhere: respawn
+    private Collider playArea;                            // DiceSide passes it in Setup
     [SerializeField] private float flatThreshold = 0.95f;
     [SerializeField] private float straightenLift = 0.2f;   // a tilted die is lifted this much, straightened, then dropped
     [SerializeField] private float straightenTime = 0.15f;
 
     [Header("Game Variables")]
-    [SerializeField] private int ThrowAttempts = 2;
-    [SerializeField] private float killHeight = -0.5f;
+    [SerializeField] private int ThrowAttempts = 3;
+    [SerializeField] private float fallDepth = 1f;          // this far below the felt counts as "fell off the table" (was a fixed Kill Height of -0.5)
+    [SerializeField] private bool logRespawns = true;       // writes why a die respawned to the Console
     [SerializeField, Min(0.01f)] private float respawnPopTime = 0.2f;   // a die that fell off pops back in at the spawn point
     private int StartingThrowAttempts;
     private Coroutine spawnSettle;
@@ -73,6 +88,11 @@ public class DiceController : MonoBehaviour
     private float nextImpact;
     private const float impactMinSpeed = 0.4f;   // softer touches are silent
     private const float impactFullSpeed = 6f;    // this hard or harder is full volume
+    public DieState State { get; private set; } = DieState.Hovering;
+    private DieState stateBeforeGrab;   // so it can go back to hovering or whatever after a grab
+    public int ThrowsLeft => ThrowAttempts;
+    public event System.Action<DiceController> OnChanged;
+    [SerializeField] private float dustMinSpeed = 3f;   // softer landings don't puff
 
     private Camera cam;
     private bool isDragging;
@@ -87,15 +107,22 @@ public class DiceController : MonoBehaviour
     private Vector3 baseScale;
     private Rigidbody rb;
     private float groundY;
+    private Collider groundCollider;
     private Die die;
+    private FaceView glowing;   // the face currently pulsing, so we can switch it off
+    private Coroutine settling;
 
     private DiceSide owner;
     private bool playerControlled;
+    public int MaxThrows => StartingThrowAttempts;
+    public Vector3 HomePosition => SpawnPosition;  
+
 
     // How many of the player's dice are in the air right now. While any are, nothing can be locked in,
     // so you can't slot a die and then watch the one still rolling land on something better.
     private static int rollingPlayerDice;
     private bool rolling;
+    public static bool AnyPlayerDiceRolling => rollingPlayerDice > 0;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStatics() { rollingPlayerDice = 0; }   // in case domain reload is off in Play Mode settings
@@ -120,19 +147,25 @@ public class DiceController : MonoBehaviour
         baseLinearDamping = rb.linearDamping;
         dieCollider = GetComponent<Collider>();
         baseAngularDamping = rb.angularDamping;
-        rb.maxAngularVelocity = 40f;   // the default (7) caps the spin, so hard throws looked like soft ones
+        rb.maxAngularVelocity = 25f;   // above the default (7) so hard throws spin, but not so fast a corner whips through the felt
+        // Speculative catches fast SPINNING corners (Discrete misses them, and Continuous Dynamic only sweeps straight-line
+        // movement). It also works on kinematic bodies, so it never has to be switched back and forth.
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
         SetInterpolation(false);       // only on while physics moves it (see SetInterpolation)
     }
 
-    public void Setup(DiceSide owner, Transform ground, Transform RespawnPoint, bool playerControlled)
+    public void Setup(DiceSide owner, Transform ground, Transform RespawnPoint, Collider playArea, bool playerControlled)
     {
         this.owner = owner;
         this.playerControlled = playerControlled;
         respawnPoint = RespawnPoint;
-        groundY = ground.GetComponent<Collider>().bounds.max.y;
+        groundCollider = ground.GetComponent<Collider>();
+        groundY = groundCollider.bounds.max.y;
         hasLanded = false;
+        this.playArea = playArea;
 
         sfx = GetComponent<AudioSource>();
+
         if (sfx == null && owner.HasDiceSounds)
         {
             sfx = gameObject.AddComponent<AudioSource>();
@@ -149,13 +182,32 @@ public class DiceController : MonoBehaviour
                 shakeSource.spatialBlend = sfx.spatialBlend;
             }
         }
-        SpawnSettle();
+        if (playerControlled)
+        {
+            GoToHover();
+        }
+        else
+        {
+            SpawnSettle();
+        }
     }
 
     private void OnDisable()
     {
         SetRolling(false);
         ToggleInputs(false);
+    }
+
+    // The enemy moves this die by hand now (the slam): stop all physics and anything still settling it
+    public void HandControl()
+    {
+        StopAllCoroutines();
+        spawnSettle = null; settleAssist = null; settling = null;
+        respawning = null; wobbleRoutine = null; rotationRoutine = null;
+        SetRolling(false);
+        StopSettleAssist();
+        rb.isKinematic = true;
+        SetInterpolation(false);
     }
 
     // ---------- Input ----------
@@ -191,6 +243,27 @@ public class DiceController : MonoBehaviour
         return Physics.Raycast(GetMouseRay(), out RaycastHit hit) && hit.transform == transform;
     }
 
+    // ---------- Spawn and hover ----------
+    private void GoToHover()
+    {
+        rb.isKinematic = true;
+        SetInterpolation(false);
+        spinAxis = Random.onUnitSphere;
+        bobPhase = Random.Range(0f, Mathf.PI * 2f);
+        SetState(DieState.Hovering);
+        ToggleInputs(true);
+    }
+
+    private void UpdateHover()   // call it from Update
+    {
+        if (!playerControlled || State != DieState.Hovering) return;
+        float height = owner.InputBlocked ? hoverHeight - 0.1f : hoverHeight + Mathf.Sin(Time.time * bobSpeed + bobPhase) * bobHeight;
+        float degreesThisFrame = (owner.InputBlocked ? spinSpeed * 0.5f : spinSpeed) * Time.deltaTime;
+
+        transform.position = spawnOffset + respawnPoint.position + Vector3.up * (height);
+        transform.Rotate(spinAxis, degreesThisFrame, Space.World);
+    }
+
     // ---------- Grab, drag, throw ----------
 
     private void Grab(InputAction.CallbackContext context)
@@ -210,7 +283,7 @@ public class DiceController : MonoBehaviour
         {
             confirmUntil = Time.time + confirmWindow;
             StartWobble();
-            Tutorial.Notice($"THROW AWAY THE {Describe(die.GetTopFace())}? GRAB IT AGAIN");
+            Tutorial.Notice($"CAN'T BEAT THE {Describe(die.GetTopFace())} · GRAB AGAIN TO THROW ANYWAY");
             return;
         }
         confirmUntil = -1f;
@@ -225,6 +298,7 @@ public class DiceController : MonoBehaviour
         restPos = transform.position;
         restRot = transform.rotation;
         targetPosition = transform.position;
+        stateBeforeGrab = State;
 
         StopSettleAssist();
         rb.isKinematic = false;
@@ -236,6 +310,7 @@ public class DiceController : MonoBehaviour
         trailCount = 0;
         RecordTrail(transform.position);
         isDragging = true;
+        SetState(DieState.Held);
         PlayDiceRotation(1f);
         PlaySound(owner.DiceGrabClip, 0.5f);
     }
@@ -244,11 +319,40 @@ public class DiceController : MonoBehaviour
     {
         if (isDragging) Drag();
         UpdateShake();
+        UpdateHover();
 
-        if (transform.position.y < killHeight)
+        if (State == DieState.Resting)
         {
-            Respawn();
+            glowing = die.GetFaceView(die.GetSocketFacing(Vector3.up));
+            float pulse = Mathf.Lerp(0.6f, 1.2f, (Mathf.Sin(Time.time * 4f) + 1f) * 0.5f);
+            glowing.SetHighlight(pulse);
         }
+
+        if (transform.position.y < groundY - fallDepth) FellOff();
+    }
+    private void FellOff()
+    {
+        if (!playerControlled || State != DieState.Rolling)
+        {
+            Respawn("fell off the table");   // enemy dice keep the old behaviour
+            return;
+        }
+        if (settling != null)
+        {
+            StopCoroutine(settling);
+            settling = null;
+        }
+        StopSettleAssist();   
+        SetRolling(false);    
+        rb.angularVelocity = Vector3.zero;
+        rb.linearVelocity = Vector3.zero;
+
+        rb.isKinematic = true;
+        ToggleInputs(true);
+        SetThrowAttempts(ThrowAttempts + 1);   // give it back so the player can throw it again
+
+        GoToHover();
+        Tutorial.Notice("IT FELL OFF THE TABLE · GRAB IT AGAIN TO THROW");
     }
 
     private void Drag()
@@ -266,12 +370,17 @@ public class DiceController : MonoBehaviour
         if (!isDragging)
         {
             ApplySettleDamping();
+            CatchTunneling();
+
+            // If the die isn't kinematic and uses gravity, push it down with the EXTRA gravity:
+            if (!rb.isKinematic && rb.useGravity) rb.AddForce(Physics.gravity * (gravityScale - 1), ForceMode.Acceleration);
             return;
         }
 
         Vector3 toTarget = targetPosition - rb.position;
         Vector3 velocity = toTarget * followSpeed;
         rb.linearVelocity = velocity;
+
 
         // Tumble the way it's moving (like it's rolling off your fingers), plus a slow idle spin
         Vector3 flat = new Vector3(velocity.x, 0f, velocity.z);
@@ -302,14 +411,16 @@ public class DiceController : MonoBehaviour
                            + Random.insideUnitSphere * randomSpin;
         landedAt = -1f;
 
-        if (ThrowAttempts > 0) ThrowAttempts--;
-        else owner.SpendBonusRethrow();   // the Rabbit's Foot throw
+        if (ThrowAttempts > 0) SetThrowAttempts(ThrowAttempts - 1);
+        else owner.SpendBonusRethrow(); 
+        Telemetry.DieThrown(owner);
         Tutorial.Done("throw");
         Tutorial.Done("lock");     // the hint says "lock it in OR throw again", so throwing again counts too
         Tutorial.Done("noslot");
         Tutorial.Done("rabbit");
         SetRolling(true);
-        StartCoroutine(WaitForSettle());
+        SetState(DieState.Rolling);
+        settling = StartCoroutine(WaitForSettle());
     }
 
     private void RecordTrail(Vector3 position)
@@ -357,6 +468,7 @@ public class DiceController : MonoBehaviour
             yield return null;
         }
         transform.SetPositionAndRotation(restPos, restRot);
+        SetState(stateBeforeGrab);   // at the END
         puttingBack = false;
     }
 
@@ -365,36 +477,9 @@ public class DiceController : MonoBehaviour
     private bool NeedsConfirm()
     {
         if (!confirmBestFace || !hasLanded || Time.time <= confirmUntil) return false;
-        if (owner.Table != TableType.High) return false;   // at Low and Target tables the "best" face isn't the biggest one
-        if (!owner.HasSlotFor(die)) return false;   // it doesn't fit anyway, so rethrowing is the right call
-        FaceDefinition top = die.GetTopFace();
-        return top != null && IsBestFace(top);
+        if (!owner.HasSlotFor(die)) return false;   // it busts if you lock it, so rethrowing is fair game
+        return owner.IsBest(die);
     }
-
-    // True if no face on this die beats the one showing (a 6 on a plain D6, a × on an operator die)
-    private bool IsBestFace(FaceDefinition top)
-    {
-        bool isNumber = top.type == FaceType.Number;
-        foreach (FaceDefinition f in die.GetCurrentFaces())
-        {
-            if (f == null || (f.type == FaceType.Number) != isNumber) continue;
-            bool better = isNumber ? f.number > top.number : OpRank(f.op) > OpRank(top.op);
-            if (better) return false;
-        }
-        return true;
-    }
-
-    private static int OpRank(Operator op)
-    {
-        switch (op)
-        {
-            case Operator.Multiply: return 3;
-            case Operator.Add: return 2;
-            case Operator.Subtract: return 1;
-            default: return 0;   // ÷ and %
-        }
-    }
-
     private static string Describe(FaceDefinition face)
     {
         return face.type == FaceType.Number ? face.number.ToString() : GameController.OpSymbol(face.op);
@@ -408,6 +493,11 @@ public class DiceController : MonoBehaviour
         StartSettleAssist();
         yield return new WaitForSeconds(0.3f);   // give it time to actually start falling
         yield return SettleFlat();
+        while (playArea != null && !playArea.bounds.Contains(transform.position))
+        {
+            Respawn("landed outside the play area");
+            yield return SettleFlat();   // SettleFlat already waits for the respawn to finish
+        }
         StopSettleAssist();
         SetInterpolation(false);
         SetRolling(false);
@@ -415,12 +505,13 @@ public class DiceController : MonoBehaviour
         hasLanded = true;
         if (!playerControlled || !CanThrowAgain)
         {
-            owner.MoveDiceToSlot(die);
+            LockIn();
         }
         else
         {
             rb.isKinematic = true;
             ToggleInputs(true);
+            SetState(DieState.Resting);
             if (ThrowAttempts <= 0) Tutorial.Hint("rabbit", "RABBIT'S FOOT: THROW IT ONCE MORE · OR RIGHT CLICK TO LOCK IT");
             else Tutorial.Hint("lock", "RIGHT CLICK TO LOCK IT IN · OR DRAG TO THROW AGAIN");
         }
@@ -433,6 +524,7 @@ public class DiceController : MonoBehaviour
         SetInterpolation(false);
         SetRolling(false);
         rb.isKinematic = true;
+        SetState(DieState.Resting);          // landed
         ToggleInputs(true);
     }
 
@@ -442,12 +534,18 @@ public class DiceController : MonoBehaviour
     private IEnumerator SettleFlat()
     {
         int tries = 0;
+        float started = Time.time;
         while (true)
         {
             while (respawning != null
                    || rb.linearVelocity.sqrMagnitude > 0.01f
                    || rb.angularVelocity.sqrMagnitude > 0.01f)
             {
+                if (Time.time - started > settleTimeout)
+                {
+                    Respawn("stuck rolling for too long");
+                    started = Time.time;   // don't respawn again immediately
+                }
                 yield return null;
             }
 
@@ -456,7 +554,7 @@ public class DiceController : MonoBehaviour
             if (++tries > 3)   // wedged somewhere weird: start over from the spawn point
             {
                 tries = 0;
-                Respawn();
+                Respawn("stuck tilted after 3 straighten tries");
             }
             else
             {
@@ -525,6 +623,24 @@ public class DiceController : MonoBehaviour
         rb.angularDamping = settleDamping;
     }
 
+    // Safety net: if a die still ends up under the felt (a corner pushed through it), lift it straight back up
+    // onto the felt where it went through, instead of letting it fall off and respawn at the spawn point.
+    private void CatchTunneling()
+    {
+        if (rb.isKinematic || respawning != null || groundCollider == null || dieCollider == null) return;
+        if (rb.linearVelocity.y > 0.5f) return;   // going up: it's bouncing, not sinking
+
+        Bounds b = dieCollider.bounds;
+        Ray down = new Ray(new Vector3(b.center.x, b.max.y + 3f, b.center.z), Vector3.down);
+        if (!groundCollider.Raycast(down, out RaycastHit hit, 6f)) return;   // not over the felt
+        if (b.max.y >= hit.point.y) return;                                   // at least partly above the surface: fine
+
+        if (logRespawns) Debug.Log($"[Dice] {name} went through the felt at {transform.position}, lifted back up", this);
+        Vector3 v = rb.linearVelocity;
+        rb.position = new Vector3(rb.position.x, hit.point.y + b.extents.y + 0.02f, rb.position.z);
+        rb.linearVelocity = new Vector3(v.x * 0.5f, 0f, v.z * 0.5f);
+    }
+
     // Slows the sideways roll by hand, and only while the die is down on the table
     private void ApplySettleDamping()
     {
@@ -550,6 +666,13 @@ public class DiceController : MonoBehaviour
         if (landedAt < 0f && collision.collider.GetComponentInParent<Die>() == null) landedAt = Time.time;
 
         float speed = collision.relativeVelocity.magnitude;
+        if (collision.collider == groundCollider && speed >= dustMinSpeed && owner != null && owner.LandDust != null)
+        {
+            ParticleSystem dust = owner.LandDust;
+            dust.transform.position = collision.GetContact(0).point;   // where the corner actually hit the felt
+            float hardness = Mathf.InverseLerp(dustMinSpeed, impactFullSpeed, speed);   // 0 = just hard enough, 1 = slammed
+            dust.Emit(Mathf.RoundToInt(Mathf.Lerp(4f, 14f, hardness)));
+        }
         if (speed < impactMinSpeed || Time.time < nextImpact) return;
         nextImpact = Time.time + 0.05f;   // one clack per bounce, not five
 
@@ -598,10 +721,21 @@ public class DiceController : MonoBehaviour
 
     // ---------- Respawn ----------
 
-    public void Respawn()
+    public void Respawn(string reason = "")
     {
         if (respawning != null) return;   // already on its way back
+        if (logRespawns) Debug.Log($"[Dice] {name} ({(playerControlled ? "player" : "enemy")}) respawned: {reason} at {transform.position}", this);
         respawning = StartCoroutine(RespawnDice());
+    }
+
+    private Vector3 SpawnPosition => respawnPoint.position + spawnOffset;
+
+    // DiceSide calls this so dice never spawn inside each other. Overlapping dice get shoved apart by the physics,
+    // hard enough to fly off the table or land wedged, and both of those respawned them.
+    public void SetSpawnOffset(Vector3 offset, bool moveNow)
+    {
+        spawnOffset = offset;
+        if (moveNow && rb.isKinematic == false && !isDragging) transform.position = SpawnPosition;
     }
 
     // It used to slide back to the spawn point through the table, which looked like the game pulling your die back.
@@ -612,7 +746,7 @@ public class DiceController : MonoBehaviour
         StopSettleAssist();
         SetInterpolation(false);
         rb.isKinematic = true;
-        transform.SetPositionAndRotation(respawnPoint.position, Random.rotation);
+        transform.SetPositionAndRotation(SpawnPosition, Random.rotation);
 
         for (float t = 0f; t < respawnPopTime; t += Time.deltaTime)
         {
@@ -632,7 +766,14 @@ public class DiceController : MonoBehaviour
 
     private void MoveDiceToSlot(InputAction.CallbackContext context)
     {
+        if (!IsMouseOverMe()) return;
         if (isDragging || puttingBack || respawning != null) return;   // it's in your hand (or on its way back): drop it first
+        if (State == DieState.Hovering)
+        {
+            StartWobble();
+            Tutorial.Notice("THROW IT FIRST");
+            return;
+        }
         if (owner.InputBlocked || !IsMouseOverMe()) return;
         if (rollingPlayerDice > 0)
         {
@@ -647,7 +788,7 @@ public class DiceController : MonoBehaviour
             return;
         }
 
-        owner.MoveDiceToSlot(die);
+        LockIn();
         ToggleInputs(false);
         Tutorial.Done("lock");
         Tutorial.Done("rabbit");
@@ -712,7 +853,7 @@ public class DiceController : MonoBehaviour
 
     public int GetThrowAttempts() { return ThrowAttempts; }
 
-    public void SetThrowAttempts(int throwAttempts) { ThrowAttempts = throwAttempts; }
+    public void SetThrowAttempts(int throwAttempts) { ThrowAttempts = throwAttempts; OnChanged?.Invoke(this); }
 
     public void Throw(Vector3 force, Vector3 torque)
     {
@@ -720,12 +861,15 @@ public class DiceController : MonoBehaviour
         rb.isKinematic = false;
         rb.useGravity = true;
         SetInterpolation(true);
+        SetState(DieState.Rolling);          // the enemy threw it
         landedAt = -1f;
 
         rb.AddForce(force, ForceMode.Impulse);
         rb.AddTorque(torque, ForceMode.Impulse);
 
-        ThrowAttempts--;
+        SetThrowAttempts(ThrowAttempts - 1);
+        OnChanged?.Invoke(this);
+        Telemetry.DieThrown(owner);
         StartCoroutine(WaitForSettle());
     }
 
@@ -747,17 +891,49 @@ public class DiceController : MonoBehaviour
         SetInterpolation(false);
         transform.localScale = baseScale;   // in case a respawn pop got cut off
 
-        ThrowAttempts = StartingThrowAttempts;
-        transform.SetPositionAndRotation(respawnPoint.position, Random.rotation);
+        SetThrowAttempts(StartingThrowAttempts);
+        transform.SetPositionAndRotation(SpawnPosition, Random.rotation);
         rb.isKinematic = false;
         rb.useGravity = true;
-        SpawnSettle();
+        if (playerControlled) GoToHover();
+        else SpawnSettle();
     }
 
     private void SpawnSettle()
     {
         if (spawnSettle != null) StopCoroutine(spawnSettle);
-        SetRolling(true);   // the drop from the spawn point counts as rolling too: its face can be locked in
+        SetRolling(true);
+        SetState(DieState.Rolling);          // dropping from the spawn point
         spawnSettle = StartCoroutine(WaitForSpawnSettle());
+    }
+
+    // On the table but out of play (swapped back after a fight): no hover, no input, no physics
+    public void Idle()
+    {
+        HandControl();               // the method from the enemy slam: stops coroutines and physics
+        ToggleInputs(false);
+        SetState(DieState.Locked);   // anything but Hovering
+    }
+
+    // ------------------- State -------------------
+    private void SetState(DieState next)
+    {
+        if (State == next) return;
+        Debug.Log($"{name}: {State} -> {next}", this);   // log while State is still the OLD one
+        State = next;
+        if (glowing != null)
+        {
+            glowing.SetHighlight(0f);
+            glowing = null;
+        }
+        OnChanged?.Invoke(this);
+    }
+
+    // Puts the die in a slot, or busts it if no slot takes its face
+    private void LockIn()
+    {
+        bool fits = owner.HasSlotFor(die);   // ask BEFORE moving: afterwards the answer has changed
+        owner.MoveDiceToSlot(die);
+        SetState(fits ? DieState.Locked : DieState.Busted);
     }
 }

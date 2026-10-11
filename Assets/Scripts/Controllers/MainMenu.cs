@@ -6,4 +6,6 @@ public class MainMenu : MonoBehaviour
     [SerializeField] private string gameScene = "Game";
 
     public void Play() => SceneManager.LoadScene(gameScene);   // hook to the button's OnClick
+
+    public void Quit() => Application.Quit();   // hook to the button's OnClick
 }

@@ -13,17 +13,19 @@ MonoBehaviour:
   m_Name: Madame Rouge
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Madame Rouge
-  maxHP: 1500
+  maxHP: 1900
   dice:
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
-  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   - {fileID: 11400000, guid: dd850c493094bb9428f807fed21cde5f, type: 2}
+  - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
-  brain: 0
-  throwAttempts: 1
+  brain: 1
+  traits:
+  - {fileID: 11400000, guid: a087d9bb1c3746c4f9f0c9acb3b9a4c9, type: 2}
+  throwAttempts: 3
   blunderChance: 0
-  rethrowBelow: 2
+  rethrowBelow: 6
   minGain: 2
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
   table: 0
@@ -31,6 +33,14 @@ MonoBehaviour:
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: Place your bets, darling
+  rerollLines:
+  - "Spin again, ch\xE9ri."
+  - Non. Encore.
+  - The wheel disagrees.
+  keepLines:
+  - Rien ne va plus
+  - The wheel has spoken.
+  - Red wins.
   winLines:
   - Rouge wins. It always does.
   - The wheel loves red.

@@ -11,6 +11,10 @@ public class FaceView : MonoBehaviour
     [SerializeField] private int glowMaterialIndex = -1;            // pips: -1 = whole face, otherwise one material
 
     private MaterialPropertyBlock block;
+    private void Awake()
+    {
+        if (label != null) baseColor = label.color;   // the prefab's colour is the truth, no second copy to keep in sync
+    }
 
     public void SetLabel(string text)
     {
@@ -19,10 +23,12 @@ public class FaceView : MonoBehaviour
 
     public void SetHighlight(float intensity)
     {
-        // Numeral face: tint the text
+        // Numeral face: the digit stays its own colour, a glowing rim grows around it
         if (label != null)
         {
-            label.color = Color.Lerp(baseColor, glowColor, intensity);
+            label.color = baseColor;
+            label.outlineColor = glowColor;              // HDR gets clamped to 0..1 here, which is fine for a rim
+            label.outlineWidth = 0.25f * intensity;      // 0 = no rim
             return;
         }
 

@@ -22,16 +22,25 @@ MonoBehaviour:
   - {fileID: 11400000, guid: dd850c493094bb9428f807fed21cde5f, type: 2}
   layout: {fileID: 11400000, guid: fde4265c052323147bc92dc480ce3f1a, type: 2}
   brain: 2
-  throwAttempts: 2
+  traits: []
+  throwAttempts: 3
   blunderChance: 0
   rethrowBelow: 5
-  minGain: 300
+  minGain: 30
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
   table: 2
-  targetRange: {x: 500, y: 6000}
+  targetRange: {x: 1000, y: 9999}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
   intro: The House always wins.
+  rerollLines:
+  - The House recalculates.
+  - "Unacceptable variance.\u201D"
+  - Again
+  keepLines:
+  - The House always wins.
+  - Odds in my favour.
+  - Expected value.
   winLines:
   - The edge is mine.
   - Pay the house.
