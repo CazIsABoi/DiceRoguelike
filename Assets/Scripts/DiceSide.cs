@@ -96,6 +96,7 @@ public abstract class DiceSide : MonoBehaviour
     [SerializeField] private float luckyDiePop = 1.6f;    // the die itself, on its best face
     [SerializeField] private float countPop = 1.5f;       // each step of the count
     [SerializeField] private float luckyHitStop = 0.06f;  // seconds the game freezes on a lucky face (0 = off)
+    public void DebugSetHealth(int hp) => InitHealth(hp);   // dev panel: max and current both become hp
 
     // While this is true the player's dice can't be grabbed or locked in (the table intro and the spare swap)
     public bool InputBlocked { get; set; }
@@ -482,36 +483,19 @@ public abstract class DiceSide : MonoBehaviour
         return false;   // every face ties: the die is irrelevant, not "best"
     }
 
-    public IEnumerator PlayCount(System.Action onStep = null)
+    // Counts this side's equation on the monitor, then what the table does to the result. CountShow does the show.
+    public IEnumerator PlayCount(System.Action onLand)
     {
-        List<GameController.CountStep> steps = GameController.CountSteps(SlotFaces());
-        for (int i = 0; i < steps.Count; i++)
+        List<FaceDefinition> faces = new List<FaceDefinition>();
+        foreach (DiceSlot slot in diceSlots)
         {
-            GameController.CountStep step = steps[i];
-
-            if (i > 0)   // this step is the result of a collapse: punch it
-            {
-                PunchEquation(countPop, 0.25f);
-                PlayRandom(countClips, 1f + i * 0.12f);
-                onStep?.Invoke();
-            }
-
-            if (step.next < 0)   // nothing left to count: the answer. Hold it.
-            {
-                equationText.text = GameController.StepText(step);
-                yield return CountWait(countStepTime * 2f);
-                break;
-            }
-
-            // Read the three tokens of this operation one at a time: 3, then +, then 2
-            int first = step.next * 2;
-            for (int t = first; t <= first + 2; t++)
-            {
-                PlayRandom(readClips, 0.9f + (t - first) * 0.1f);   // rises a little: 3... + ... 2...
-                yield return ReadToken(step, t);
-            }
-            // the loop goes round: the next step is the collapsed result, and gets the punch
+            if (slot.IsEmpty) faces.Add(slot.AcceptableFace == FaceType.Number ? numberFiller : operatorFiller);
+            else faces.Add(slot.CurrentDie.GetTopFace());
         }
+
+        CountShow counter = Game.Counter;
+        if (counter == null) { equationText.text = GameController.Evaluate(faces).ToString(); yield break; }
+        yield return counter.PlaySide(equationText, GameController.CountSteps(faces), BustPenalty(), onLand);
     }
 
     // One token jumps big and eases down to "slightly big" while the rest stays normal
@@ -661,6 +645,11 @@ public abstract class DiceSide : MonoBehaviour
             total += face.type == FaceType.Number ? face.number : gameController.OperatorBustPenalty;
         }
         return total;
+    }
+    public void NotifyDiceChanged()
+    {
+        OnDiceChanged?.Invoke();
+        if (diceSlots.Count > 0) RefreshEquation(false);
     }
 
     #region Health

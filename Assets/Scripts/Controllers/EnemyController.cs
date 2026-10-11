@@ -192,7 +192,23 @@ public class EnemyController : DiceSide
     }
 
     // A fair die: every side equally likely. Blank faces count, they're real sides.
-    private int RollFace(Die die) => Random.Range(0, die.GetCurrentFaces().Length);
+    private int RollFace(Die die)
+    {
+        FaceDefinition[] faces = die.GetCurrentFaces();
+        if (DevPanel.EnemyRoll != DevPanel.RollMode.Normal)
+        {
+            bool best = DevPanel.EnemyRoll == DevPanel.RollMode.Best;
+            int pick = -1;
+            for (int i = 0; i < faces.Length; i++)
+            {
+                FaceDefinition f = faces[i];
+                if (f == null || f.type != FaceType.Number) continue;
+                if (pick < 0 || (best ? f.number > faces[pick].number : f.number < faces[pick].number)) pick = i;
+            }
+            if (pick >= 0) return pick;   // operator dice have no numbers: they still roll normally
+        }
+        return Random.Range(0, faces.Length);
+    }
 
     // Where die number i lands: its own spot, so the dice don't slam into each other
     private Vector3 LandSpot(Die die)

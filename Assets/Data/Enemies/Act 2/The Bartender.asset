@@ -18,7 +18,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
-  layout: {fileID: 11400000, guid: eece12ddfbc84134e98c36c41abfc8fa, type: 2}
+  layout: {fileID: 11400000, guid: 6312ee136d7587b4787f7488957bea26, type: 2}
   brain: 2
   traits: []
   throwAttempts: 2

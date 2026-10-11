@@ -308,6 +308,7 @@ public class RewardController : MonoBehaviour
 
         // Swap
         yield return die.SwapFace(selectedIndex, chosenFace);
+        player.NotifyDiceChanged();
         yield return new WaitForSeconds(afterSwapPause);
 
         // Back to where it was

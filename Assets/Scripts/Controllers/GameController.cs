@@ -112,13 +112,17 @@ public class GameController : MonoBehaviour
     [Header("Reveal")]
     [SerializeField] private float monitorHold = 1.2f;   // how long the camera lingers on the result before zooming out
     [SerializeField, Range(0f, 1f)] private float rollThreshold = 0.5f;   // wins at least this big get the nixie roll
-    [SerializeField] private float marginReadTime = 0.2f;   // seconds per token while reading "37 - 24"
-    [SerializeField] private float readPopSize = 170f;      // percent
-    [SerializeField] private float readHoldSize = 125f;     // percent
-    [SerializeField] private AudioClip marginTick;          // optional: a soft tick per token read
-    [SerializeField] private float fastForward = 4f;        // holding Shift or the mouse plays the reveal this much faster
     [SerializeField] private NixieHealth playerHealthTubes;
     [SerializeField] private NixieHealth enemyHealthTubes;
+
+    [Header("Counting")]
+    [SerializeField] private CountShow counter;                                   // empty: found by itself
+    [SerializeField] private AudioClip knockoutClip;                              
+    [SerializeField, Range(0f, 0.1f)] private float photoFinishShare = 0.02f;     // a gap this small a share of the bigger number...
+    [SerializeField] private int photoFinishMin = 50;                             // ...when that number is at least this big...
+    [SerializeField, Range(0.1f, 1f)] private float photoFinishSpeed = 0.4f;      // ...counts the margin this slowly
+    public CountShow Counter => counter;
+    public int LowCap => lowCap;
 
 
     private const string formUrl = "https://docs.google.com/forms/d/e/1FAIpQLScix26Ts907fGNdApSgtKu10-K0fdspGZps9k1Yjl9vXGlMGg/viewform";
@@ -147,6 +151,7 @@ public class GameController : MonoBehaviour
 
     private void Awake()
     {
+        if (counter == null) counter = FindAnyObjectByType<CountShow>();
         SchoolOrder = schoolOrder;
     }
     private void Start()
@@ -289,7 +294,8 @@ public class GameController : MonoBehaviour
         if (Traits != null) foreach (EnemyTrait t in Traits) if (t != null) yield return t.BeforeDamage(enemy);
 
         yield return cameraController.FocusOn(monitorView, 0.45f);
-        yield return enemy.PlayCount(() => cameraController.Kick());       
+        if (counter != null) counter.NewRound();   // the pitch starts at the bottom again
+        yield return enemy.PlayCount(() => cameraController.Kick());    
         yield return player.PlayCount(() => cameraController.Kick(4f));       
 
         int diff = playerScore - enemyScore;
@@ -317,6 +323,7 @@ public class GameController : MonoBehaviour
             {
                 int hpBefore = enemy.Health;
                 enemy.TakeDamage(diff);
+                RunDamageCounter.Add(diff);
                 if (enemy.IsDead && player.HasRelic(RelicType.CarryTheOne)) carry = diff - hpBefore;
             }
         });
@@ -655,6 +662,14 @@ public class GameController : MonoBehaviour
                 return result - bust;
         }
     }
+    // The number the margin compares for one side: the score at High and Limit, the distance at Low and Target
+    public int MarginNumber(int result, int bust)
+    {
+        int s = TableScore(result, bust);
+        if (Table == TableType.Low) return -s / player.Stake;
+        if (Table == TableType.Target) return -s;
+        return s;
+    }
 
     // What "nothing fits" counts as when a Calculating enemy weighs up a rethrow
     public int WorstScore
@@ -902,49 +917,34 @@ public class GameController : MonoBehaviour
         return steps;
     }
 
-    // Reads the margin token by token on the score text, then shows the answer (big wins: the nixie roll)
     private IEnumerator PlayMargin(List<CountStep> steps, int amount, float intensity, bool roll)
     {
         if (scoreFadeRoutine != null) StopCoroutine(scoreFadeRoutine);
         scoreText.color = Color.white;
+        if (counter == null) { scoreText.text = amount.ToString(); yield break; }
 
-        for (int i = 0; i < steps.Count; i++)
+        int bigger = steps[0].numbers[0];
+        int gap = bigger - steps[0].numbers[1];
+        if (gap > 0 && bigger >= photoFinishMin && gap <= bigger * photoFinishShare)
         {
-            CountStep step = steps[i];
-            if (step.next < 0)   // the answer
-            {
-                if (roll && scoreCounter != null) yield return scoreCounter.Roll(amount, intensity);
-                else scoreText.text = amount.ToString();
-                yield break;
-            }
-
-            if (i > 0) StartCoroutine(Pop(scoreText.transform, Vector3.one, 1.25f, 0.2f));   // "× stake": a small collapse
-
-            int first = step.next * 2;
-            for (int t = first; t <= first + 2; t++)
-            {
-                if (marginTick != null) { audio.pitch = 0.9f + (t - first) * 0.1f; audio.PlayOneShot(marginTick, 0.7f); }
-                yield return ReadToken(step, t);
-            }
+            counter.Speed = photoFinishSpeed;
+            strip.Flash("PHOTO FINISH", Color.yellow, 3f);
         }
+
+        int knockoutAt = score > 0 ? enemy.Health : 0;   // only your hits knock out
+        yield return counter.PlayMargin(scoreText, steps, roll ? scoreCounter : null, intensity, knockoutAt, Knockout);
+        counter.Speed = 1f;
     }
 
-    private IEnumerator ReadToken(CountStep step, int token)
+    // The damage count just passed the enemy's HP: this hit kills (the tubes still have to get there)
+    private void Knockout()
     {
-        float t = 0f;
-        while (t < marginReadTime)
-        {
-            float k = t / marginReadTime;
-            k = 1f - (1f - k) * (1f - k);
-            scoreText.text = StepText(step, token, Mathf.Lerp(readPopSize, readHoldSize, k));
-            t += Time.deltaTime * RevealSpeed;
-            yield return null;
-        }
+        strip.Flash("KNOCKOUT", Color.red, 2.5f);
+        StartCoroutine(HitStop(0.08f));
+        cameraController.Kick(6f);
+        CameraShake.Instance?.AddTrauma(0.4f);
+        if (knockoutClip != null) audio.PlayOneShot(knockoutClip);
     }
-
-    private float RevealSpeed =>
-        (Keyboard.current != null && Keyboard.current.shiftKey.isPressed) ||
-        (Mouse.current != null && Mouse.current.leftButton.isPressed) ? fastForward : 1f;
 
     // ---------- Reusable juice (static: any MonoBehaviour can StartCoroutine these) ----------
 
@@ -1087,5 +1087,26 @@ public class GameController : MonoBehaviour
         }
         equationsGroup.alpha = eqTo;
         scoreText.alpha = scTo;
+    }
+
+    // ------ Debug ------
+    // Dev panel: abandon whatever is happening and start fight n fresh (camera, intro, banner and all)
+    public void DebugJumpToFight(int n)
+    {
+        n = Mathf.Clamp(n, 1, ladder.Length);
+        StopAllCoroutines();                 // the round, the enemy turn and the camera moves all live in here
+        Time.timeScale = 1f;
+        roundEnding = false;
+        playerResult = null;
+        enemyResult = null;
+        player.RevertSwaps();
+
+        Fight = n;
+        int started = 0;
+        foreach (int s in actStarts) if (s < n) started++;
+        Act = Mathf.Max(1, started);         // BeginFight bumps it (and plays ACT 2) when n is an act's first fight
+
+        player.ResetRound();
+        StartCoroutine(BeginFight());
     }
 }
