@@ -5723,6 +5723,7 @@ GameObject:
   m_Component:
   - component: {fileID: 761343123}
   - component: {fileID: 761343122}
+  - component: {fileID: 761343124}
   m_Layer: 0
   m_Name: BGM
   m_TagString: Untagged
@@ -5842,6 +5843,31 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &761343124
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 761343121}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93671c62fc9d44f4cb163ea42be495af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: '::'
+  bgmClips:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 8300000, guid: 1b37efaf759c62a45bbc485e532830a7, type: 3}
+  - {fileID: 8300000, guid: 29eedfe6bd3b3e945bc4f737d95efab4, type: 3}
+  - {fileID: 8300000, guid: 4bd0cf14eb87aa546aa0b0c0b72c6534, type: 3}
+  - {fileID: 8300000, guid: 07948bde28bfa9a4b83b47ebbad8ba06, type: 3}
+  - {fileID: 8300000, guid: 27815228dee403d4e88b38f21588771c, type: 3}
+  - {fileID: 8300000, guid: d9e3b36c480fc81488c65f0805a08d29, type: 3}
 --- !u!1 &780216125
 GameObject:
   m_ObjectHideFlags: 0
