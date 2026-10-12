@@ -34,6 +34,8 @@ public class CountShow : MonoBehaviour
 
     [Header("Timing")]
     [SerializeField] private float pace = 1f;                   // everything takes this many times as long: 1.3 = slower, 0.7 = snappier
+    [SerializeField] private float secondsPerNumber = 0.06f;   // a small count shows each number at least this long
+    [SerializeField] private int maxTicks = 20;                // past this many numbers it just runs (big counts blur, that's fine)
     [SerializeField] private float readTime = 0.1f;             // seconds per token
     [SerializeField] private float minCountTime = 0.15f;        // the shortest count
     [SerializeField] private float countTimePerDigit = 0.22f;   // each digit of change adds this much: +7 takes 0.35 s, +9,702 takes 1 s
@@ -49,7 +51,24 @@ public class CountShow : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float volume = 0.8f;
     [SerializeField] private float tickInterval = 0.035f;       // at most one tick this often
     [SerializeField] private float basePitch = 0.8f;            // the first note of a round
-    [SerializeField] private AudioMixerGroup output;            // optional
+    [SerializeField] private AudioClip suspenseLoop;              // loops while a big count builds (drumroll, riser, slot whir)
+    [SerializeField, Range(0f, 1f)] private float suspenseVolume = 0.6f;
+    [SerializeField] private float suspenseLowPitch = 0.9f;       // pitch as it starts...
+    [SerializeField] private float suspenseHighPitch = 1.3f;      // ...and at the top of the biggest count
+    [SerializeField] private float suspenseFadeIn = 0.25f;        // seconds
+    [SerializeField] private float suspenseFadeOut = 0.12f;       // short, so the finish sound lands in the gap
+    [SerializeField] private AudioMixerGroup output;
+
+    private AudioSource suspense;
+    private float suspenseTarget, suspenseLevel;                  // 0..1: where it's headed, where it is
+
+    [Header("Big Counts")]
+    [SerializeField] private CountZoom zoom;                  // on the Main Camera. Empty: found by itself
+    [SerializeField] private float maxZoom = 12f;             // degrees of field of view the biggest count pushes in
+    [SerializeField] private float zoomFromDigits = 2f;       // smaller counts don't zoom (2 digits of change = about +100)
+    [SerializeField] private float fullZoomDigits = 4f;       // this big zooms all the way (4 = about +10,000)
+    [SerializeField] private AudioClip[] finishClips;         // the payoff when a big count lands
+    [SerializeField, Range(0f, 1f)] private float finishVolume = 1f;
 
     // GameController slows this down for a photo finish
     public float Speed { get; set; } = 1f;
@@ -81,6 +100,7 @@ public class CountShow : MonoBehaviour
     private void Awake()
     {
         if (game == null) game = FindAnyObjectByType<GameController>();
+        if (zoom == null) zoom = FindAnyObjectByType<CountZoom>();
         CacheColors();
 
         voices = new AudioSource[6];
@@ -91,6 +111,25 @@ public class CountShow : MonoBehaviour
             voices[i].spatialBlend = 0f;   // 2D: the count is part of the screen, not the room
             voices[i].outputAudioMixerGroup = output;
         }
+        suspense = gameObject.AddComponent<AudioSource>();
+        suspense.playOnAwake = false;
+        suspense.loop = true;
+        suspense.spatialBlend = 0f;
+        suspense.outputAudioMixerGroup = output;
+        suspense.clip = suspenseLoop;
+    }
+    private void Update()
+    {
+        if (suspense == null || suspenseLoop == null) return;
+
+        float time = suspenseTarget > suspenseLevel ? suspenseFadeIn : suspenseFadeOut;
+        suspenseLevel = Mathf.MoveTowards(suspenseLevel, suspenseTarget, Time.unscaledDeltaTime / Mathf.Max(0.01f, time));
+
+        suspense.volume = suspenseLevel * suspenseVolume * volume;
+        suspense.pitch = Mathf.Lerp(suspenseLowPitch, suspenseHighPitch, suspenseLevel);
+
+        if (suspenseLevel > 0.001f && !suspense.isPlaying) suspense.Play();
+        else if (suspenseLevel <= 0.001f && suspense.isPlaying) suspense.Stop();
     }
 
     private void OnValidate() => CacheColors();   // colours changed in the Inspector show up next count
@@ -108,8 +147,7 @@ public class CountShow : MonoBehaviour
     // A round's counting starts: the pitch goes back to the bottom
     public void NewRound()
     {
-        note = 0;
-        Speed = 1f;
+        Release();
     }
 
     // DiceSide.PlayCount: one side's equation, then what the table does to the result.
@@ -134,6 +172,7 @@ public class CountShow : MonoBehaviour
         text.text = final + tag;
         if (exact) yield return Stamp(text, 1.5f, holdTime * 4f, true);
         else if (tag.Length > 0 || beats.Count == 0) yield return Stamp(text, 1.2f, holdTime, false);
+        Release();
     }
 
     // GameController.PlayMargin: "63-20", the gap counted up from 0 (then × the stake at a Low table).
@@ -148,6 +187,7 @@ public class CountShow : MonoBehaviour
         yield return PlayBeats(text, beats, null, false, slotRoll, intensity, knockoutAt, onKnockout);
 
         StopPop();
+        Release();   // snaps out and cuts the loop on the impact
         if (slotRoll == null) text.text = steps[steps.Count - 1].numbers[0].ToString();   // plain, so the impact can colour it
     }
 
@@ -279,6 +319,7 @@ public class CountShow : MonoBehaviour
 
             // 3. LAND
             if (!last || landLast) Land(text, beat, onLand);
+            else Finish(beat);   // the margin's last count: GameController does the punch, we do the sound
             yield return Wait(holdTime);
         }
     }
@@ -318,6 +359,7 @@ public class CountShow : MonoBehaviour
 
         float digits = Digits(beat);
         float duration = Mathf.Min(maxCountTime, minCountTime + countTimePerDigit * digits);
+        duration = Mathf.Max(duration, Mathf.Min(Mathf.Abs(beat.to - beat.from), maxTicks) * secondsPerNumber);   // small counts: every number gets its moment
         float grow = Mathf.Lerp(100f, growSize, Mathf.Clamp01(digits / 4f));
         string color = beat.color;
         bool crossed = knockoutAt <= 0;
@@ -328,6 +370,9 @@ public class CountShow : MonoBehaviour
         {
             float k = Mathf.Clamp01(t / duration);
             float eased = k * k * (3f - 2f * k);   // slow start, a blur in the middle, a slow landing
+            float big = Bigness(beat);
+            if (big > 0f) suspenseTarget = Mathf.Max(suspenseTarget, big * eased);   // builds as it climbs
+            if (zoom != null && big > 0f) zoom.Target = Mathf.Max(zoom.Target, maxZoom * big * eased);   // leans in as it climbs
             // double, so a count into the millions doesn't lose digits on the way
             int value = k >= 1f ? beat.to : (int)System.Math.Round(beat.from + ((double)beat.to - beat.from) * eased);
 
@@ -364,6 +409,8 @@ public class CountShow : MonoBehaviour
         Play(landClips, Note(note), 0.9f);
         Pop(text, Mathf.Lerp(1.12f, landPop, Mathf.Clamp01(Digits(beat) / 4f)));
         onLand?.Invoke();
+        if (Bigness(beat) > 0f) suspenseTarget = 0f;   // stops for the payoff. The zoom stays in until the side is done
+        Finish(beat);
     }
 
     private void NewDigit(TMP_Text text)
@@ -410,6 +457,20 @@ public class CountShow : MonoBehaviour
 
     // ---------- Helpers ----------
 
+    // 0..1: how big a count this is. 0 below zoomFromDigits, 1 at fullZoomDigits and up
+    private float Bigness(Beat beat) => Mathf.InverseLerp(zoomFromDigits, fullZoomDigits, Digits(beat));
+
+    // The payoff sound for a big count landing
+    private void Finish(Beat beat)
+    {
+        float big = Bigness(beat);
+        if (big > 0f) Play(finishClips, 1f, finishVolume * Mathf.Lerp(0.6f, 1f, big));
+    }
+    private void Release()
+    {
+        if (zoom != null) zoom.Target = 0f;
+        suspenseTarget = 0f;
+    }
     private float CountSpeed
     {
         get
