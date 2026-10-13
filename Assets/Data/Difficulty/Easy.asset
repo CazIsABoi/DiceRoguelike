@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee0eaa43138da4b4198be98fe966d5af, type: 3}
+  m_Name: Easy
+  m_EditorClassIdentifier: Assembly-CSharp::DifficultyDefinition
+  displayName: EASY
+  description: EASIER ENEMIES, START WITH A MULTIPLICATION FACE
+  telemetryName: Easy
+  startingDice:
+  - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
+  - {fileID: 11400000, guid: 6e07d3b3daf9e5f46b7bfb86ff17be99, type: 2}
+  - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
+  enemyHpMultiplier: 0.85
+  leftToRight: 0
+  color: {r: 0.7191711, g: 1, b: 0.495283, a: 1}
+  randomMixedFaces: 0
+  randomOperators: []
+  randomNumbers: []
+  minimumPlus: 1
+  plusOnEachDie: 0
+  bossDice: {fileID: 0}

@@ -41,6 +41,14 @@ public class DiceController : MonoBehaviour
     private readonly float[] trailTime = new float[24];
     private int trailHead, trailCount;
 
+    [Header("Click To Throw")]   // ThrowStyle Click: the same slam the enemy does
+    [SerializeField] private float slamLift = 0.6f;          // how high it goes above where it lands
+    [SerializeField] private float slamLiftTime = 0.12f;
+    [SerializeField] private float slamHangTime = 0.15f;
+    [SerializeField] private float slamDropTime = 0.08f;
+    [SerializeField] private float slamSpin = 900f;          // degrees per second in the air
+    [SerializeField] private float slamJitter = 0.08f;       // lands a little off its spot, so it doesn't look stamped
+
     [Header("Settling")]
     [SerializeField] private float freeRollTime = 0.8f;     // after the first bounce it rolls freely this long...
     [SerializeField] private float settleDamping = 5f;      // ...then damping ramps up to this...
@@ -268,6 +276,7 @@ public class DiceController : MonoBehaviour
 
     private void Grab(InputAction.CallbackContext context)
     {
+        if (SettingsMenu.IsOpen || ChipTray.Targeting) return;   // a chip is waiting for an enemy die: clicks are for that
         if (puttingBack || owner.InputBlocked || !IsMouseOverMe()) return;
 
         // Waiting on the Rabbit's Foot, but another die used it first
@@ -288,6 +297,7 @@ public class DiceController : MonoBehaviour
         }
         confirmUntil = -1f;
         StopWobble();
+        if (ThrowStyle.ClickToThrow) { ClickThrow(); return; }
 
         Ray ray = GetMouseRay();
         dragPlane = new Plane(Vector3.up, new Vector3(0f, groundY + liftHeight, 0f));
@@ -315,6 +325,103 @@ public class DiceController : MonoBehaviour
         PlaySound(owner.DiceGrabClip, 0.5f);
     }
 
+    // Click to throw: the bookkeeping of a throw, then the enemy-style slam
+    private void ClickThrow()
+    {
+        if (ThrowAttempts > 0) SetThrowAttempts(ThrowAttempts - 1);
+        else owner.SpendBonusRethrow();   // the Rabbit's Foot throw
+        Telemetry.DieThrown(owner);
+        Tutorial.Done("throw");
+        Tutorial.Done("lock");
+        Tutorial.Done("noslot");
+        Tutorial.Done("rabbit");
+        settling = StartCoroutine(SlamThrow());
+    }
+
+    // Picks a face (every side equally likely), lifts, spins, and slams down on its own spot with that face up.
+    // The same steps as EnemyController.Slam, so both sides throw the same way.
+    private IEnumerator SlamThrow()
+    {
+        ToggleInputs(false);
+        SetState(DieState.Rolling);       // first: while it's Hovering, UpdateHover pins it in the air
+        SetRolling(true);
+        StopSettleAssist();
+        SetInterpolation(false);
+        rb.isKinematic = true;            // no physics: we move it by hand, like the enemy's "hand"
+        PlaySound(owner.DiceGrabClip, 0.5f);
+
+        Transform t = transform;
+        int faceIndex = Random.Range(0, die.GetCurrentFaces().Length);
+        Transform socket = die.GetSocket(faceIndex);
+        Quaternion faceUp = Quaternion.FromToRotation(socket.up, Vector3.up) * t.rotation;
+        Quaternion endRot = Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up) * faceUp;
+
+        // Where it lands: its own spot (the spawn point plus this die's offset), so your dice never land on each other
+        Vector2 jitter = Random.insideUnitCircle * slamJitter;
+        Vector3 spot = SpawnPosition + new Vector3(jitter.x, 0f, jitter.y);
+        spot.y = groundCollider.Raycast(new Ray(spot + Vector3.up * 3f, Vector3.down), out RaycastHit hit, 10f)
+               ? hit.point.y : groundY;
+        float half = Vector3.Distance(socket.position, t.position);
+        Vector3 restPos = spot + Vector3.up * half;
+        Vector3 highPos = restPos + Vector3.up * slamLift;
+        Vector3 spinAxis = Random.onUnitSphere;
+
+        // a. Lift: fast, then slow, spinning
+        Vector3 from = t.position;
+        for (float time = 0f; time < slamLiftTime; time += Time.deltaTime)
+        {
+            float k = time / slamLiftTime;
+            k = 1f - (1f - k) * (1f - k);
+            t.position = Vector3.Lerp(from, highPos, k);
+            t.Rotate(spinAxis, slamSpin * Time.deltaTime, Space.World);
+            yield return null;
+        }
+
+        // b. Hang, still spinning
+        for (float time = 0f; time < slamHangTime; time += Time.deltaTime)
+        {
+            t.position = highPos;
+            t.Rotate(spinAxis, slamSpin * Time.deltaTime, Space.World);
+            yield return null;
+        }
+
+        // c. Drop: slow, then fast, turning into the chosen face
+        Quaternion spun = t.rotation;
+        for (float time = 0f; time < slamDropTime; time += Time.deltaTime)
+        {
+            float k = time / slamDropTime;
+            k = k * k;
+            t.SetPositionAndRotation(Vector3.Lerp(highPos, restPos, k), Quaternion.Slerp(spun, endRot, k));
+            yield return null;
+        }
+        t.SetPositionAndRotation(restPos, endRot);
+
+        // d. Impact: dust, a clack, a little squash
+        if (owner.LandDust != null)
+        {
+            owner.LandDust.transform.position = spot;
+            owner.LandDust.Emit(14);
+        }
+        AudioClip[] clips = owner.DiceHitClips;
+        if (clips != null && clips.Length > 0) PlaySound(clips[Random.Range(0, clips.Length)], 1f);
+        StartCoroutine(GameController.Pop(t, baseScale, 1.15f, 0.2f));
+
+        // e. Landed: the same ending as WaitForSettle
+        SetRolling(false);
+        hasLanded = true;
+        settling = null;
+        if (!CanThrowAgain)
+        {
+            LockIn();
+        }
+        else
+        {
+            ToggleInputs(true);
+            SetState(DieState.Resting);
+            if (ThrowAttempts <= 0) Tutorial.Hint("rabbit", "RABBIT'S FOOT: THROW IT ONCE MORE · OR RIGHT CLICK TO LOCK IT");
+            else Tutorial.Hint("lock", "RIGHT CLICK TO LOCK IT IN · OR " + ThrowStyle.AgainHint);
+        }
+    }
     private void Update()
     {
         if (isDragging) Drag();
@@ -513,7 +620,7 @@ public class DiceController : MonoBehaviour
             ToggleInputs(true);
             SetState(DieState.Resting);
             if (ThrowAttempts <= 0) Tutorial.Hint("rabbit", "RABBIT'S FOOT: THROW IT ONCE MORE · OR RIGHT CLICK TO LOCK IT");
-            else Tutorial.Hint("lock", "RIGHT CLICK TO LOCK IT IN · OR DRAG TO THROW AGAIN");
+            else Tutorial.Hint("lock", "RIGHT CLICK TO LOCK IT IN · OR " + ThrowStyle.AgainHint);
         }
     }
 
@@ -766,6 +873,7 @@ public class DiceController : MonoBehaviour
 
     private void MoveDiceToSlot(InputAction.CallbackContext context)
     {
+        if (SettingsMenu.IsOpen || ChipTray.Targeting) return;   // a chip is waiting for an enemy die: clicks are for that
         if (!IsMouseOverMe()) return;
         if (isDragging || puttingBack || respawning != null) return;   // it's in your hand (or on its way back): drop it first
         if (State == DieState.Hovering)

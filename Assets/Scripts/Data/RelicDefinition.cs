@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public enum RelicType { TimesTable, RabbitsFoot, PocketDie, Insurance, CarryTheOne }
+public enum RelicType { TimesTable, RabbitsFoot, PocketDie, Insurance, CarryTheOne, OppositeDay, Bullseye, DoubleDown, EvenSteven, LuckySeven, PrimeTime,  }
 
 // One asset per relic. The type decides what it does (PlayerController and GameController read it),
 // the rest is what the relic screen shows.

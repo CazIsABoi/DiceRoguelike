@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5927e4924b8b8b84b9217f2fcb1764fc, type: 3}
+  m_Name: Boss_Dice_Pool
+  m_EditorClassIdentifier: Assembly-CSharp::BossDicePool
+  dice:
+  - die: {fileID: 11400000, guid: fcd22e3c1703a1e47b62f072dff855a1, type: 2}
+    unlockedBy: {fileID: 0}
+  - die: {fileID: 11400000, guid: d47bb16aca2d6384587ef77b3576d685, type: 2}
+    unlockedBy: {fileID: 0}
+  - die: {fileID: 11400000, guid: cb471beda4892cc4a8c5a7579cb1e94d, type: 2}
+    unlockedBy: {fileID: 0}
+  - die: {fileID: 11400000, guid: 5e6d1edfffeffec46bdf354c18e8a9d7, type: 2}
+    unlockedBy: {fileID: 0}
+  - die: {fileID: 11400000, guid: 495d00418768f6c4bb951cae0378b6e3, type: 2}
+    unlockedBy: {fileID: 0}
+  - die: {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
+    unlockedBy: {fileID: 0}
+  choices: 3

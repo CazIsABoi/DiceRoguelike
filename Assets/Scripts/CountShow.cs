@@ -42,6 +42,8 @@ public class CountShow : MonoBehaviour
     [SerializeField] private float maxCountTime = 1.2f;
     [SerializeField] private float holdTime = 0.1f;             // a breath after each landing
     [SerializeField] private float fastForward = 4f;            // holding Shift or the mouse plays it this much faster
+    [SerializeField] private float countStretch = 1f;     // every count takes this many times as long (reads and pauses stay the same)
+    [SerializeField] private float bigCountExtra = 2f;    // extra seconds a big count gets, on top (scaled by how big it is)
 
     [Header("Sound")]
     [SerializeField] private AudioClip[] readClips;             // a soft tick per token read
@@ -57,6 +59,7 @@ public class CountShow : MonoBehaviour
     [SerializeField] private float suspenseHighPitch = 1.3f;      // ...and at the top of the biggest count
     [SerializeField] private float suspenseFadeIn = 0.25f;        // seconds
     [SerializeField] private float suspenseFadeOut = 0.12f;       // short, so the finish sound lands in the gap
+    [SerializeField, Range(1, 8)] private int maxNote = 4;   // how far up the scale one side's count climbs
     [SerializeField] private AudioMixerGroup output;
 
     private AudioSource suspense;
@@ -152,23 +155,24 @@ public class CountShow : MonoBehaviour
 
     // DiceSide.PlayCount: one side's equation, then what the table does to the result.
     // Ends showing the number the margin is about to use: "55" at a High table, "63 OFF" at a Target table.
-    public IEnumerator PlaySide(TMP_Text text, List<GameController.CountStep> steps, int bust, System.Action onLand)
+    public IEnumerator PlaySide(TMP_Text text, List<GameController.CountStep> steps, int bust,
+                                System.Action onLand, bool isPlayer = false)
     {
+        note = 0;
         int result = steps[steps.Count - 1].numbers[0];
         string bustTail = bust > 0 ? Paint(game.BustText(bust), bustHex) : "";
 
         List<Beat> beats = FromSteps(steps, countHex, bustTail);
         int final = AddTableBeats(beats, result, bust, bustTail, out string tag, out bool exact);
 
-        // The count and the maths must agree, or the margin would compare numbers nobody saw
         int expected = game.MarginNumber(result, bust);
         if (final != expected)
             Debug.LogWarning($"[Carry the One] CountShow ends on {final}, but the table says {expected}. " +
                              "Did TableScore change? Make CountShow.AddTableBeats do the same thing.");
 
-        yield return PlayBeats(text, beats, onLand, true, null, 0f, 0, null);
+        yield return PlayBeats(text, beats, onLand, true, null, 0f, 0, null,
+                               allowSuspense: isPlayer, allowZoomFinish: false);
 
-        // The end: one plain number and the table's word for it, stamped on
         text.text = final + tag;
         if (exact) yield return Stamp(text, 1.5f, holdTime * 4f, true);
         else if (tag.Length > 0 || beats.Count == 0) yield return Stamp(text, 1.2f, holdTime, false);
@@ -178,17 +182,18 @@ public class CountShow : MonoBehaviour
     // GameController.PlayMargin: "63-20", the gap counted up from 0 (then × the stake at a Low table).
     // slotRoll: a big win finishes on the nixie roll instead. knockoutAt: the count passing this calls onKnockout (0 = never).
     public IEnumerator PlayMargin(TMP_Text text, List<GameController.CountStep> steps, NixieCounter slotRoll, float intensity,
-                                  int knockoutAt, System.Action onKnockout)
+                                  int knockoutAt, System.Action onKnockout, bool isPlayerDiff = false)
     {
         List<Beat> beats = FromSteps(steps, countHex, "");
-        if (beats.Count > 0) beats[0].from = 0;   // the damage counts up from nothing
+        if (beats.Count > 0) beats[0].from = 0;
 
-        // The last landing is left to GameController's impact (two punches on one text at once would fight)
-        yield return PlayBeats(text, beats, null, false, slotRoll, intensity, knockoutAt, onKnockout);
+        // Margin: suspense no, zoom/snare only on player's positive diff
+        yield return PlayBeats(text, beats, null, false, slotRoll, intensity, knockoutAt, onKnockout,
+                               allowSuspense: false, allowZoomFinish: isPlayerDiff);
 
         StopPop();
-        Release();   // snaps out and cuts the loop on the impact
-        if (slotRoll == null) text.text = steps[steps.Count - 1].numbers[0].ToString();   // plain, so the impact can colour it
+        Release();
+        if (slotRoll == null) text.text = steps[steps.Count - 1].numbers[0].ToString();
     }
 
     // ---------- Building the beats ----------
@@ -293,33 +298,36 @@ public class CountShow : MonoBehaviour
     // ---------- Playing them ----------
 
     private IEnumerator PlayBeats(TMP_Text text, List<Beat> beats, System.Action onLand, bool landLast,
-                                  NixieCounter slotRoll, float intensity, int knockoutAt, System.Action onKnockout)
+                                  NixieCounter slotRoll, float intensity, int knockoutAt, System.Action onKnockout,
+                                  bool allowSuspense = false, bool allowZoomFinish = false)
     {
         for (int i = 0; i < beats.Count; i++)
         {
             Beat beat = beats[i];
             bool last = i == beats.Count - 1;
 
-            // 1. READ the part about to change. Numbers are even tokens, operators odd: number k is token 2k.
             int first = beat.at * 2;
             int end = beat.pair ? first + 2 : first;
             for (int token = first; token <= end; token++)
             {
-                if (beat.pair && token % 2 == 0 && token / 2 == beat.known) continue;   // just watched it land
+                if (beat.pair && token % 2 == 0 && token / 2 == beat.known) continue;
                 yield return Read(text, beat, token);
             }
 
-            // 2. COUNT
             if (last && slotRoll != null)
             {
-                yield return slotRoll.Roll(beat.to, intensity);
+                float big = allowZoomFinish ? Bigness(beat) : 0f;
+                System.Action<float> zoomDrive = null;
+                if (allowZoomFinish && zoom != null && big > 0f)
+                    zoomDrive = p => zoom.Target = Mathf.Max(zoom.Target, maxZoom * big * p);
+
+                yield return slotRoll.Roll(beat.to, intensity, zoomDrive, Speed);
                 if (knockoutAt > 0 && beat.to >= knockoutAt) onKnockout?.Invoke();
             }
-            else yield return Count(text, beat, last ? knockoutAt : 0, onKnockout);
+            else yield return Count(text, beat, last ? knockoutAt : 0, onKnockout, allowSuspense, allowZoomFinish);
 
-            // 3. LAND
-            if (!last || landLast) Land(text, beat, onLand);
-            else Finish(beat);   // the margin's last count: GameController does the punch, we do the sound
+            if (!last || landLast) yield return Wait(holdTime);   // the margin's last number goes straight into the hit
+            else Finish(beat, allowZoomFinish);
             yield return Wait(holdTime);
         }
     }
@@ -339,7 +347,8 @@ public class CountShow : MonoBehaviour
     }
 
     // The odometer: every number between from and to goes past, the pitch slides up one note on the way
-    private IEnumerator Count(TMP_Text text, Beat beat, int knockoutAt, System.Action onKnockout)
+    private IEnumerator Count(TMP_Text text, Beat beat, int knockoutAt, System.Action onKnockout,
+                          bool allowSuspense = false, bool allowZoomFinish = false)
     {
         // What's on screen while it counts: the pair has become one number, at beat.at
         List<int> numbers = new List<int>(beat.numbers);
@@ -358,8 +367,10 @@ public class CountShow : MonoBehaviour
         }
 
         float digits = Digits(beat);
+        float big = Bigness(beat);                                                    // 0 for small counts, up to 1 for huge ones
         float duration = Mathf.Min(maxCountTime, minCountTime + countTimePerDigit * digits);
         duration = Mathf.Max(duration, Mathf.Min(Mathf.Abs(beat.to - beat.from), maxTicks) * secondsPerNumber);   // small counts: every number gets its moment
+        duration = duration * countStretch + big * bigCountExtra;
         float grow = Mathf.Lerp(100f, growSize, Mathf.Clamp01(digits / 4f));
         string color = beat.color;
         bool crossed = knockoutAt <= 0;
@@ -369,10 +380,13 @@ public class CountShow : MonoBehaviour
         for (float t = 0f; ; t += Time.deltaTime * CountSpeed)
         {
             float k = Mathf.Clamp01(t / duration);
-            float eased = k * k * (3f - 2f * k);   // slow start, a blur in the middle, a slow landing
-            float big = Bigness(beat);
-            if (big > 0f) suspenseTarget = Mathf.Max(suspenseTarget, big * eased);   // builds as it climbs
-            if (zoom != null && big > 0f) zoom.Target = Mathf.Max(zoom.Target, maxZoom * big * eased);   // leans in as it climbs
+            float eased = k * k * (3f - 2f * k);
+
+            if (allowSuspense && big > 0f)
+                suspenseTarget = Mathf.Max(suspenseTarget, big * eased);
+
+            if (allowZoomFinish && big > 0f && zoom != null)
+                zoom.Target = Mathf.Max(zoom.Target, maxZoom * big * eased);
             // double, so a count into the millions doesn't lose digits on the way
             int value = k >= 1f ? beat.to : (int)System.Math.Round(beat.from + ((double)beat.to - beat.from) * eased);
 
@@ -403,14 +417,14 @@ public class CountShow : MonoBehaviour
         }
     }
 
-    private void Land(TMP_Text text, Beat beat, System.Action onLand)
+    private void Land(TMP_Text text, Beat beat, System.Action onLand, bool allowZoomFinish = false)
     {
-        note = Mathf.Min(note + 1, Scale.Length - 1);   // one note up; past the top it stays there
+        note = Mathf.Min(note + 1, maxNote);
         Play(landClips, Note(note), 0.9f);
         Pop(text, Mathf.Lerp(1.12f, landPop, Mathf.Clamp01(Digits(beat) / 4f)));
         onLand?.Invoke();
-        if (Bigness(beat) > 0f) suspenseTarget = 0f;   // stops for the payoff. The zoom stays in until the side is done
-        Finish(beat);
+        if (Bigness(beat) > 0f) suspenseTarget = 0f;
+        Finish(beat, allowZoomFinish);
     }
 
     private void NewDigit(TMP_Text text)
@@ -461,10 +475,14 @@ public class CountShow : MonoBehaviour
     private float Bigness(Beat beat) => Mathf.InverseLerp(zoomFromDigits, fullZoomDigits, Digits(beat));
 
     // The payoff sound for a big count landing
-    private void Finish(Beat beat)
+    private void Finish(Beat beat, bool allowZoomFinish = false)
     {
         float big = Bigness(beat);
-        if (big > 0f) Play(finishClips, 1f, finishVolume * Mathf.Lerp(0.6f, 1f, big));
+        if (allowZoomFinish && big > 0f)
+        {
+            Play(finishClips, 1f, finishVolume * Mathf.Lerp(0.6f, 1f, big));
+            if (zoom != null) zoom.Target = 0f;   // start the zoom-out as the snare hits
+        }
     }
     private void Release()
     {
@@ -497,7 +515,7 @@ public class CountShow : MonoBehaviour
         return n;
     }
 
-    private float Note(int i) => basePitch * Mathf.Pow(2f, Scale[Mathf.Clamp(i, 0, Scale.Length - 1)] / 12f);
+    private float Note(int i) => basePitch * Mathf.Pow(2f, Scale[Mathf.Clamp(i, 0, maxNote)] / 12f);
 
     private void Play(AudioClip[] clips, float pitch, float loudness)
     {

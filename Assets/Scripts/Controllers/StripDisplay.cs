@@ -57,6 +57,22 @@ public class StripDisplay : MonoBehaviour
         scrollRoutine = StartCoroutine(ScrollRoutine(message, color, loops));
     }
 
+    // Like Flash, but a message too long for the strip scrolls across once instead (and then clears itself)
+    public void FlashScrolling(string message, Color color, float duration)
+    {
+        if (Fits(message)) Flash(message, color, duration);
+        else ShowScrolling(message, color, 1);
+    }
+
+    private bool Fits(string message)
+    {
+        if (scrollLabel == null) return true;   // no scroll label set up: just show it
+        scrollLabel.text = message;
+        scrollLabel.ForceMeshUpdate();
+        RectTransform area = (RectTransform)scrollLabel.rectTransform.parent;
+        return scrollLabel.preferredWidth <= area.rect.width;
+    }
+
     public void Clear()
     {
         StopAll();

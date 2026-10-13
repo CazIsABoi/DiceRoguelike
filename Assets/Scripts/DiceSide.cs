@@ -48,7 +48,6 @@ public abstract class DiceSide : MonoBehaviour
     protected List<Die> bustedDice = new List<Die>();
 
     [Header("Count")]
-    [SerializeField] private float countStepTime = 0.4f;
     [SerializeField] private float countFastForward = 4f;   // holding the mouse button plays it this many times faster
     [SerializeField] private ParticleSystem placeSparks;   // ONE system in the scene, reused for every placement
     [SerializeField] private int luckySparks = 40;         // the best face
@@ -94,7 +93,6 @@ public abstract class DiceSide : MonoBehaviour
     [SerializeField] private float placePopMin = 1.15f;   // placing this die's worst face
     [SerializeField] private float placePopMax = 1.9f;    // placing its best face
     [SerializeField] private float luckyDiePop = 1.6f;    // the die itself, on its best face
-    [SerializeField] private float countPop = 1.5f;       // each step of the count
     [SerializeField] private float luckyHitStop = 0.06f;  // seconds the game freezes on a lucky face (0 = off)
     public void DebugSetHealth(int hp) => InitHealth(hp);   // dev panel: max and current both become hp
 
@@ -110,6 +108,130 @@ public abstract class DiceSide : MonoBehaviour
     // Rabbit's Foot: PlayerController overrides these. Enemies never get a bonus rethrow.
     public virtual bool HasBonusRethrow => false;
     public virtual void SpendBonusRethrow() { }
+
+    // Chips: a face that counts instead of the one showing, for this round only (Snatch: × becomes +, Nudge: 7 becomes 6)
+    private readonly Dictionary<DiceSlot, FaceDefinition> faceOverrides = new Dictionary<DiceSlot, FaceDefinition>();
+
+    // The face a slot counts as: the override if there is one, else the die's top face
+    private FaceDefinition FaceIn(DiceSlot slot)
+    {
+        if (slot.IsEmpty) return null;
+        return faceOverrides.TryGetValue(slot, out FaceDefinition f) ? f : slot.CurrentDie.GetTopFace();
+    }
+
+    public bool Owns(Die die) => spawnedDice != null && System.Array.IndexOf(spawnedDice, die) >= 0;
+
+    public DiceSlot SlotOf(Die die)
+    {
+        foreach (DiceSlot slot in diceSlots) if (!slot.IsEmpty && slot.CurrentDie == die) return slot;
+        return null;
+    }
+
+    // What a placed die counts as right now (with overrides), or null if it isn't in a slot
+    public FaceDefinition PlacedFace(Die die)
+    {
+        DiceSlot slot = SlotOf(die);
+        return slot != null ? FaceIn(slot) : null;
+    }
+
+    // Lucky Seven: how many slots hold this number
+    public int CountPlaced(int number)
+    {
+        int count = 0;
+        foreach (DiceSlot slot in diceSlots)
+        {
+            FaceDefinition f = FaceIn(slot);
+            if (f != null && f.type == FaceType.Number && f.number == number) count++;
+        }
+        return count;
+    }
+
+    // Chips (Snatch, Nudge): this placed die counts as 'face' for the rest of the round.
+    // The new face slams onto its top side too, so the die shows what it counts as. The old one goes back at the end of the round.
+    public void OverrideFace(Die die, FaceDefinition face)
+    {
+        DiceSlot slot = SlotOf(die);
+        if (slot == null || face == null) return;
+        faceOverrides[slot] = face;
+
+        int index = die.GetSocketFacing(Vector3.up);
+        FaceDefinition[] faces = die.GetCurrentFaces();
+        if (index >= 0 && index < faces.Length && faces[index] != null)
+        {
+            swappedFaces.Add(new SwappedFace { die = die, index = index, original = faces[index] });
+            StartCoroutine(die.SwapFace(index, face));
+        }
+        StartCoroutine(GameController.Pop(die.transform, die.transform.localScale, 1.3f, 0.3f));
+        RefreshEquation(true);
+        CheckComplete();
+    }
+
+    private struct SwappedFace { public Die die; public int index; public FaceDefinition original; }
+    private readonly List<SwappedFace> swappedFaces = new List<SwappedFace>();
+
+    // Puts back the faces the chips swapped (all of them, or just the ones on 'only')
+    private void RestoreFaces(Die only = null)
+    {
+        for (int i = swappedFaces.Count - 1; i >= 0; i--)
+        {
+            SwappedFace s = swappedFaces[i];
+            if (only != null && s.die != only) continue;
+            if (s.die != null) StartCoroutine(s.die.SwapFace(s.index, s.original));
+            swappedFaces.RemoveAt(i);
+        }
+    }
+
+    // Chip (Reroll): a placed die jumps, spins and lands on a random face in the same slot. A face that doesn't fit busts.
+    public IEnumerator RerollPlaced(Die die)
+    {
+        DiceSlot slot = SlotOf(die);
+        if (slot == null) yield break;
+        faceOverrides.Remove(slot);
+        RestoreFaces(die);   // a snatched die gets its real faces back before it rolls
+
+        Transform t = die.transform;
+        Vector3 home = t.position;
+        Vector3 spinAxis = Random.onUnitSphere;
+        const float upTime = 0.25f, downTime = 0.12f;
+        for (float time = 0f; time < upTime; time += Time.deltaTime)
+        {
+            t.position = Vector3.Lerp(home, home + Vector3.up * 0.6f, Mathf.Sin(time / upTime * Mathf.PI * 0.5f));
+            t.Rotate(spinAxis, 900f * Time.deltaTime, Space.World);
+            yield return null;
+        }
+
+        // Land with a random face up, lined up with the slot (MoveRoutine's maths, with that face instead of the top one)
+        int index = Random.Range(0, die.GetCurrentFaces().Length);
+        Transform socket = die.GetSocket(index);
+        Vector3 localUp = t.InverseTransformDirection(socket.up);
+        Vector3 localForward = t.InverseTransformDirection(socket.forward);
+        Quaternion targetRot = slot.transform.rotation * Quaternion.Inverse(Quaternion.LookRotation(localForward, localUp));
+        float restHeight = Vector3.Distance(socket.position, t.position);
+        Vector3 targetPos = slot.transform.position + slot.transform.up * restHeight;
+        Vector3 fromPos = t.position;
+        Quaternion fromRot = t.rotation;
+        for (float time = 0f; time < downTime; time += Time.deltaTime)
+        {
+            float k = time / downTime;
+            k = k * k;
+            t.SetPositionAndRotation(Vector3.Lerp(fromPos, targetPos, k), Quaternion.Slerp(fromRot, targetRot, k));
+            yield return null;
+        }
+        t.SetPositionAndRotation(targetPos, targetRot);
+        StartCoroutine(GameController.Pop(t, t.localScale, 1.15f, 0.2f));
+        PlayRandom(diceHitClips);
+
+        FaceDefinition top = die.GetTopFace();
+        if (top == null || top.type != slot.AcceptableFace)   // a + on a number slot: it busts like any misfit
+        {
+            slot.Clear();
+            diceInSlots--;
+            Bust(die);   // Bust re-counts the equation
+            yield break;
+        }
+        RefreshEquation(true);
+        CheckComplete();
+    }
 
     private void HandleDieChanged(DiceController changed) => OnDiceChanged?.Invoke();
 
@@ -163,11 +285,14 @@ public abstract class DiceSide : MonoBehaviour
         spawnedDice = null;
         diceInSlots = 0;
         bustedDice.Clear();
+        faceOverrides.Clear();
+        swappedFaces.Clear();
     }
 
     // Called by GameController when it's time for a new round
     public void ResetRound()
     {
+        RestoreFaces();
         if (IsPlayerControlled) Telemetry.StartRound();
         AssignSpawnSpots(false);
         for (int i = 0; i < spawnedDice.Length; i++)
@@ -182,6 +307,7 @@ public abstract class DiceSide : MonoBehaviour
 
         diceInSlots = 0;
         bustedDice.Clear();
+        faceOverrides.Clear();
         RefreshEquation(true);
     }
 
@@ -320,12 +446,15 @@ public abstract class DiceSide : MonoBehaviour
         foreach (DiceSlot slot in diceSlots)
         {
             if (slot.IsEmpty) faces.Add(slot.AcceptableFace == FaceType.Number ? numberFiller : operatorFiller);
-            else faces.Add(slot.CurrentDie.GetTopFace());
+            else faces.Add(FaceIn(slot));
         }
         return faces;
     }
 
-    private int EvaluateSlots() => GameController.Evaluate(SlotFaces());
+    private int EvaluateSlots() => GameController.Evaluate(SlotFaces(), SevenValue);
+
+    // What a 7 counts as on this side (PlayerController: 14 with Lucky Seven at a High table)
+    public virtual int SevenValue => 7;
 
     protected string BuildEquation(bool playSound = true)
     {
@@ -342,7 +471,7 @@ public abstract class DiceSide : MonoBehaviour
 
             if (i == hiddenSlot) { text += "?"; continue; }   // Poker Face: the die is there, you just can't see it
 
-            FaceDefinition face = diceSlots[i].CurrentDie.GetTopFace();
+            FaceDefinition face = FaceIn(diceSlots[i]);
             if (face.type == FaceType.Number)
             {
                 text += face.number;
@@ -490,12 +619,12 @@ public abstract class DiceSide : MonoBehaviour
         foreach (DiceSlot slot in diceSlots)
         {
             if (slot.IsEmpty) faces.Add(slot.AcceptableFace == FaceType.Number ? numberFiller : operatorFiller);
-            else faces.Add(slot.CurrentDie.GetTopFace());
+            else faces.Add(FaceIn(slot));
         }
 
         CountShow counter = Game.Counter;
-        if (counter == null) { equationText.text = GameController.Evaluate(faces).ToString(); yield break; }
-        yield return counter.PlaySide(equationText, GameController.CountSteps(faces), BustPenalty(), onLand);
+        if (counter == null) { equationText.text = GameController.Evaluate(faces, SevenValue).ToString(); yield break; }
+        yield return counter.PlaySide(equationText, GameController.CountSteps(faces, SevenValue), BustPenalty(), onLand, IsPlayerControlled);
     }
 
     // One token jumps big and eases down to "slightly big" while the rest stays normal
@@ -526,7 +655,7 @@ public abstract class DiceSide : MonoBehaviour
         foreach (DiceSlot slot in diceSlots)
         {
             if (slot.IsEmpty) text.Append(slot.AcceptableFace == FaceType.Number ? "0" : GameController.OpSymbol(operatorFiller.op));
-            else text.Append(Telemetry.Name(slot.CurrentDie.GetTopFace()));
+            else text.Append(Telemetry.Name(FaceIn(slot)));
         }
         return text.ToString();
     }
@@ -552,7 +681,7 @@ public abstract class DiceSide : MonoBehaviour
         // 1. What's already locked in. null = empty slot.
         List<FaceDefinition> slots = new List<FaceDefinition>();
         foreach (DiceSlot slot in diceSlots)
-            slots.Add(slot.IsEmpty ? null : slot.CurrentDie.GetTopFace());
+            slots.Add(FaceIn(slot));
 
         // 2. The faces still on the table, waiting to be placed
         List<FaceDefinition> free = new List<FaceDefinition>();
@@ -579,7 +708,7 @@ public abstract class DiceSide : MonoBehaviour
                 if (slots[i] != null) filled.Add(slots[i]);
                 else filled.Add(diceSlots[i].AcceptableFace == FaceType.Number ? numberFiller : operatorFiller);
             }
-            int score = Game.TableScore(GameController.Evaluate(filled), bust);
+            int score = Game.TableScore(GameController.Evaluate(filled, SevenValue), bust);
             if (score > best) best = score;
             return;
         }

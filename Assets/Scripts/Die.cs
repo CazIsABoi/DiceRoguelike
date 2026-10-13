@@ -6,6 +6,7 @@ public class Die : MonoBehaviour
 {
     [SerializeField] private Transform[] sockets;   // Socket0..Socket5 in order
     [SerializeField] private int faceCount = 6;   // 4, 6, 8, 10, 12, 20 per prefab
+    public DieRole Role { get; private set; } = DieRole.Auto;
     [SerializeField] private float faceScale = 1f;
     [SerializeField] private float faceDepth = 0.3f;
     [SerializeField] private DieDefinition testDefinition; // for testing without a spawner
@@ -28,6 +29,7 @@ public class Die : MonoBehaviour
 
     public void Initialize(DieDefinition definition)
     {
+        Role = definition.role;
         currentFaces = new FaceDefinition[sockets.Length];
         spawnedFaces = new FaceView[sockets.Length];
         for (int i = 0; i < sockets.Length; i++)

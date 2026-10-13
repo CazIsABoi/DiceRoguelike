@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 public class ScreenButtons : MonoBehaviour
 {
@@ -11,6 +12,9 @@ public class ScreenButtons : MonoBehaviour
         public RectTransform rect;   // the button area on the hidden canvas
         public Image image;          // optional: gets brighter on hover
         public UnityEvent onClick;
+        public UnityEvent onHoverEnter;   // optional, e.g. MainMenu.Describe(Easy)
+        public UnityEvent onHoverExit;    // optional, e.g. MainMenu.Describe(None)
+        [HideInInspector] public bool hovered;
     }
 
     [SerializeField] private Camera cam;                 // the main camera, not the screen's render camera
@@ -24,29 +28,43 @@ public class ScreenButtons : MonoBehaviour
     [SerializeField] private Color normalColor = new Color(1f, 1f, 1f, 0.6f);
     [SerializeField] private Color hoverColor = Color.white;
 
+    [Header("Clicks")]
+    [SerializeField] private float clickCooldown = 0.3f;   // seconds after a click (or a panel change) when clicks are ignored
+
+    private float clicksAllowedAt;
+
     private void OnEnable()
     {
         click.action.Enable();
         mousePos.action.Enable();
+        clicksAllowedAt = Time.unscaledTime + clickCooldown;   // no click lands the moment the menu appears
     }
 
     private void Update()
     {
-        if (click.action.WasPressedThisFrame())
-        {
-            Vector2 m = mousePos.action.ReadValue<Vector2>();
-            bool didHit = Physics.Raycast(cam.ScreenPointToRay(m), out RaycastHit h);
-            Debug.Log($"[Screen] mouse {m}  screen {Screen.width}x{Screen.height}  " +
-                      $"hit {(didHit ? h.collider.name : "nothing")}  uv {(didHit ? h.textureCoord : Vector2.zero)}");
-        }
-
         bool onScreen = TryGetCanvasPoint(out Vector3 world);
+        bool clicked = click.action.WasPressedThisFrame() && Time.unscaledTime >= clicksAllowedAt;
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) { onScreen = false; clicked = false; }
+        ScreenButton toClick = null;
 
         foreach (ScreenButton b in buttons)
         {
             bool over = onScreen && b.rect.gameObject.activeInHierarchy && Contains(b.rect, world);
             if (b.image != null) b.image.color = over ? hoverColor : normalColor;
-            if (over && click.action.WasPressedThisFrame()) b.onClick.Invoke();
+
+            if (over != b.hovered)
+            {
+                b.hovered = over;
+                if (over) b.onHoverEnter?.Invoke(); else b.onHoverExit?.Invoke();
+            }
+            if (over && clicked && toClick == null) toClick = b;   // only the first button under the mouse
+        }
+
+        // Clicked after the loop, so a button that opens another panel can't also click a button on that panel
+        if (toClick != null)
+        {
+            clicksAllowedAt = Time.unscaledTime + clickCooldown;
+            toClick.onClick.Invoke();
         }
     }
 

@@ -7,6 +7,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using static UnityEngine.Rendering.RayTracingAccelerationStructure;
 
 public class GameController : MonoBehaviour
 {
@@ -39,7 +40,7 @@ public class GameController : MonoBehaviour
     [Header("Bust")]
     [SerializeField] private int bustBase = 3;
     public int Fight { get; private set; } = 1;
-    public int OperatorBustPenalty => bustBase * Fight * player.Stake;   // the stake grows with your number dice, like your HP
+    public int OperatorBustPenalty => (bustBase + RunSettings.RaiseBustExtra) * Fight * player.Stake;   // the stake grows with your number dice, like your HP
 
     [Header("Acts")]
     [SerializeField] private int[] actStarts = { 1, 9, 17 };   // first fight of each act: 8 + 8 + 5 fights
@@ -51,11 +52,13 @@ public class GameController : MonoBehaviour
     [SerializeField] private AudioClip loseClip;
 
     [Header("Run")]
-    [SerializeField] private EnemyDefinition[] ladder;
-    public EnemyDefinition[] Ladder => ladder;
+    [SerializeField] private EnemyDefinition[] ladder;      // the fights in order. With Slots filled in, it's rolled from them every run
+    [SerializeField] private LadderSlot[] slots;            // enemy pools: one per fight, each run picks one enemy from each
+    public EnemyDefinition[] Ladder => ladder;              // this run's enemies (already rolled by the time anything asks)
     public int[] ActStarts => actStarts;
     public event System.Action<int> OnFightStarted;   
-    private EnemyTrait[] Traits => ladder[Fight - 1].traits;
+    private EnemyTrait[] currentTraits = new EnemyTrait[0];
+    private EnemyTrait[] Traits => currentTraits;           // this enemy's traits, plus any a Raise level adds
     [SerializeField] private float introTime = 2f;
     [SerializeField] private float actBannerTime = 2.5f;
 
@@ -63,6 +66,7 @@ public class GameController : MonoBehaviour
     [SerializeField] private float timeBetweenRounds = 2f;
     [SerializeField] FaceDefinition[] rewardPool;
     private List<FaceDefinition> facePool;
+    [SerializeField] private BossDicePool bossDice;
     [SerializeField, Range(0, 100)] private int healPercent = 40;   // the heal reward gives this much of your max HP
 
     [Header("Turn Order")]
@@ -83,7 +87,7 @@ public class GameController : MonoBehaviour
 
     [Header("Relics")]
     [SerializeField] private RelicDefinition[] relicPool;     // the five relics. Empty = no relic screens! (right-click this component > Find Relic Assets)
-    [SerializeField] private int[] relicFights = { 4, 8, 16 }; // a relic screen follows the reward screen after these fights
+    [SerializeField] private int[] relicFights = { 4, 8, 12, 16 }; // a relic screen follows the reward screen after these fights (the sim: with 11 relics, 4 screens keep Normal where 3 screens and 5 relics had it)
     [SerializeField] private RectTransform relicBar;          // an empty UI object on your HUD canvas: the icons are built inside it
     [SerializeField] private float relicIconSize = 48f;
     [SerializeField] private Color relicColor = new Color32(0xFF, 0x71, 0x34, 0xFF);
@@ -95,6 +99,18 @@ public class GameController : MonoBehaviour
     private RelicDefinition hoveredRelic;
     private bool warnedTableText;
     private int carry;                                        // Carry the One: damage past the last enemy's HP
+    private int oppositeDayAct;
+
+    [Header("More Relics")]
+    [SerializeField] private int primeMultiplier = 2;         // Prime Time: a prime result at a High table deals this many times the damage
+    [SerializeField] private int bullseyeMultiplier = 3;      // Bullseye: an exact hit (the target, 0 at a Low table, the limit itself) deals this many times the damage
+    [SerializeField] private int luckySevenBonus = 7;         // Lucky Seven: at High tables each 7 you play is worth 7 more, before the maths: 7 × 3 is 14 × 3
+    public int LuckySevenValue => 7 + luckySevenBonus;        // what a 7 counts as (a 7 in the tens is 140 instead of 70: the same +7 in its place)
+    [SerializeField, Range(0, 100)] private int evenStevenHeal = 3;   // Even Steven: an even result heals this % of your max HP
+    [SerializeField] private bool evenStevenOnlyWins = true;          // Even Steven: only rounds you win. The sim: 5% on every round took Normal from 21% to 42%, this is about 28%
+    [SerializeField] private float relicFlashTime = 1.2f;
+    private bool doubleDownArmed;
+    private int doubleDownFight;                              // the fight Double Down was used in (0 = not yet)
 
     [Header("End Screen")]
     [SerializeField] private GameObject endPanel;
@@ -122,7 +138,7 @@ public class GameController : MonoBehaviour
     [SerializeField] private int photoFinishMin = 50;                             // ...when that number is at least this big...
     [SerializeField, Range(0.1f, 1f)] private float photoFinishSpeed = 0.4f;      // ...counts the margin this slowly
     public CountShow Counter => counter;
-    public int LowCap => lowCap;
+    public int LowCap => lowCap + RunSettings.RaiseLowCapExtra;   // Raise (Low Blow) adds to it
 
 
     private const string formUrl = "https://docs.google.com/forms/d/e/1FAIpQLScix26Ts907fGNdApSgtKu10-K0fdspGZps9k1Yjl9vXGlMGg/viewform";
@@ -151,8 +167,9 @@ public class GameController : MonoBehaviour
 
     private void Awake()
     {
+        ladder = RollLadder();   // in Awake, so the ladder board sees this run's enemies when it builds itself
         if (counter == null) counter = FindAnyObjectByType<CountShow>();
-        SchoolOrder = schoolOrder;
+        SchoolOrder = schoolOrder && !RunSettings.LeftToRight;
     }
     private void Start()
     {
@@ -169,6 +186,27 @@ public class GameController : MonoBehaviour
         UpdateRelicBar();
         Telemetry.StartRun();
         StartCoroutine(BeginFight());
+    }
+
+    private void Update()
+    {
+        if (Keyboard.current != null && Keyboard.current.dKey.wasPressedThisFrame) TryDoubleDown();
+    }
+
+    // Double Down: once a fight, before your first throw of a round. That round's damage counts twice, either way.
+    public void TryDoubleDown()
+    {
+        if (!player.HasRelic(RelicType.DoubleDown) || SettingsMenu.IsOpen || doubleDownArmed) return;
+        if (doubleDownFight == Fight) { Tutorial.Notice("DOUBLE DOWN IS USED UP THIS FIGHT"); return; }
+        if (player.InputBlocked) return;
+        if (!player.NoDiceThrownYet) { Tutorial.Notice("DOUBLE DOWN BEFORE YOUR FIRST THROW"); return; }
+
+        doubleDownArmed = true;
+        doubleDownFight = Fight;
+        Tutorial.Done("doubledown");
+        player.TriggerRelic(RelicType.DoubleDown);
+        UpdateRelicBar();
+        strip.Flash("DOUBLE DOWN · THIS ROUND COUNTS TWICE", Color.yellow, 2f);
     }
 
     // ---------- Round flow ----------
@@ -206,6 +244,10 @@ public class GameController : MonoBehaviour
         EnemyDefinition def = ladder[Fight - 1];   // Fight starts at 1
         Table = def.table;
         targetRange = def.targetRange;
+        currentTraits = RunSettings.TraitsFor(def.traits, Act);
+        bool boss = IsBossFight(def);
+        enemy.ExtraThrows = boss ? RunSettings.RaiseBossThrows : 0;   // Raise (Boss Throws, not in the default table)
+        enemy.HpMultiplier = boss ? RunSettings.RaiseBossHp : 1f;     // Raise (Pit Watch)
         enemy.Load(def);
         OnFightStarted?.Invoke(Fight);
         if (Traits != null) foreach (EnemyTrait t in Traits) if (t != null) t.OnFightStart(enemy);
@@ -278,7 +320,9 @@ public class GameController : MonoBehaviour
         yield return rig.MoveTo(tableView);         
         cameraController.SetLook(true);
         player.InputBlocked = false;
-        if (Fight == 1) Tutorial.Hint("throw", "DRAG A DIE AND LET GO TO THROW IT");
+        if (Fight == 1) Tutorial.Hint("throw", ThrowStyle.ThrowHint);
+        else if (player.HasRelic(RelicType.DoubleDown) && doubleDownFight != Fight)
+            Tutorial.Hint("doubledown", "DOUBLE DOWN: PRESS D BEFORE YOU THROW");
         yield break;
     }
 
@@ -295,13 +339,51 @@ public class GameController : MonoBehaviour
 
         yield return cameraController.FocusOn(monitorView, 0.45f);
         if (counter != null) counter.NewRound();   // the pitch starts at the bottom again
-        yield return enemy.PlayCount(() => cameraController.Kick());    
-        yield return player.PlayCount(() => cameraController.Kick(4f));       
+        yield return enemy.PlayCount(() => cameraController.Kick());
+
+        // Lucky Seven: your 7s are already worth more in the result (PlayerController.SevenValue). Say so before your
+        // count, so the 14s in it make sense.
+        if (player.SevenValue != 7 && player.CountPlaced(7) > 0)
+        {
+            player.TriggerRelic(RelicType.LuckySeven);
+            strip.Flash($"LUCKY SEVEN · EVERY 7 IS A {player.SevenValue}", Color.yellow, relicFlashTime);
+            yield return new WaitForSeconds(relicFlashTime * 0.6f);
+        }
+        yield return player.PlayCount(() => cameraController.Kick(4f));
 
         int diff = playerScore - enemyScore;
         Telemetry.RoundScored(playerScore, enemyScore);
+        List<CountStep> margin = MarginSteps(playerScore, enemyScore);
+
+        // Relics that multiply the damage: shown as one more "× 2" step at the end of the count
+        int multiplier = 1;
+        List<string> why = new List<string>();
+        if (doubleDownArmed)
+        {
+            doubleDownArmed = false;
+            multiplier *= 2;
+            why.Add("DOUBLE DOWN ×2");
+        }
+        if (diff > 0 && Table == TableType.High && player.HasRelic(RelicType.PrimeTime) && IsPrime(playerScore))
+        {
+            multiplier *= primeMultiplier;
+            why.Add($"{playerScore} IS PRIME ×{primeMultiplier}");
+            player.TriggerRelic(RelicType.PrimeTime);
+        }
+        if (diff > 0 && player.HasRelic(RelicType.Bullseye) && IsBullseye(playerScore))
+        {
+            multiplier *= bullseyeMultiplier;
+            why.Add($"BULLSEYE ×{bullseyeMultiplier}");
+            player.TriggerRelic(RelicType.Bullseye);
+        }
+        if (multiplier > 1 && diff != 0)
+        {
+            diff *= multiplier;
+            MultiplyMargin(margin, multiplier);
+            strip.Flash(string.Join(" · ", why), Color.yellow, relicFlashTime);
+            yield return new WaitForSeconds(relicFlashTime);
+        }
         score = diff;
-        List<CountStep> margin = MarginSteps(playerScore, enemyScore);  
 
         yield return SwapMonitor(true);
         yield return RevealResult(diff, margin);          // the show, zoomed in
@@ -310,6 +392,17 @@ public class GameController : MonoBehaviour
         player.ClearTotal();
         yield return SwapMonitor(false);                  // equations back, while still close enough to read them
         yield return cameraController.FocusBack(0.5f);    // zoom out: now the HP tubes are in view
+                                                          // Opposite Day: once per act, the first round you lose flips into a win by the same margin
+        if (diff < 0 && player.HasRelic(RelicType.OppositeDay) && oppositeDayAct != Act)
+        {
+            oppositeDayAct = Act;
+            diff = -diff;
+            score = diff;
+            player.TriggerRelic(RelicType.OppositeDay);
+            UpdateRelicBar();
+            strip.Flash("OPPOSITE DAY! THAT LOSS IS A WIN", Color.yellow, 1.5f);
+            yield return new WaitForSeconds(1.5f);
+        }
 
         bool insured = false;
         yield return Drain(diff, () =>
@@ -327,6 +420,17 @@ public class GameController : MonoBehaviour
                 if (enemy.IsDead && player.HasRelic(RelicType.CarryTheOne)) carry = diff - hpBefore;
             }
         });
+
+        // Even Steven: an even result heals you a little (only on a win, unless Even Steven Only Wins is off)
+        if (player.HasRelic(RelicType.EvenSteven) && !player.IsDead && playerResult.Value % 2 == 0 && (!evenStevenOnlyWins || diff > 0))
+        {
+            int heal = Mathf.Max(1, player.MaxHealth * evenStevenHeal / 100);
+            if (player.Health < player.MaxHealth)
+            {
+                player.Heal(heal);
+                player.TriggerRelic(RelicType.EvenSteven);
+            }
+        }
 
         if (Traits != null) foreach (EnemyTrait t in Traits) if (t != null) t.OnRoundEnd(enemy, diff < 0);
         if (diff > 0) strip.Flash("YOU WIN", Color.green, timeBetweenRounds);
@@ -356,16 +460,20 @@ public class GameController : MonoBehaviour
             EnemyDefinition beaten = ladder[Fight - 1];
             facePool.AddRange(beaten.unlockFaces);
 
-            if (beaten.dieDrop != null)          // act bosses hand their die over: one more digit, one more zero on your HP
+            if (beaten.dieDrop != null)          // act bosses: a new die. One more digit, one more zero on your HP
             {
-                player.AddDie(beaten.dieDrop);
-                player.Heal(player.MaxHealth - player.Health);   // and a full heal for the next act
+                BossDicePool pool = RunSettings.BossDice(bossDice);
+                List<DieDefinition> choices = pool != null ? pool.Roll() : new List<DieDefinition>();
+                if (choices.Count > 1) yield return reward.BossDieRoutine(player, choices);
+                else player.AddDie(choices.Count == 1 ? choices[0] : beaten.dieDrop);
+
+                player.Heal((player.MaxHealth - player.Health) * RunSettings.RaiseBossHealPercent / 100);   // a full heal for the next act (Raise: Last Call halves it)
                 strip.Flash($"NEW DIE · MAX HP {player.MaxHealth}", Color.yellow, 2.5f);
                 yield return new WaitForSeconds(2.5f);
             }
 
-            int heal = player.MaxHealth * healPercent / 100;
-            List<RelicDefinition> relicChoices = System.Array.IndexOf(relicFights, Fight) >= 0 ? RollRelics(3) : null;
+            int heal = Mathf.RoundToInt(player.MaxHealth * healPercent * RunSettings.RaiseHealMultiplier / 100f);   // Raise: No Comps
+            List<RelicDefinition> relicChoices = System.Array.IndexOf(relicFights, Fight) >= 0 ? RollRelics(RunSettings.RelicChoices(3)) : null;
             yield return reward.RewardRoutine(player, facePool.ToArray(), beaten.unlockFaces, heal, relicChoices);
             Fight++;
 
@@ -457,9 +565,11 @@ public class GameController : MonoBehaviour
     private IEnumerator EndRun(bool won)
     {
         Telemetry.EndRun(won);
+        int opened = won ? RunSettings.RecordClear() : 0;   // the next Raise level, if this clear opened one
         equationPanel.SetActive(false);
         endPanel.SetActive(true);
-        endStats.text = won ? $"ALL {ladder.Length} FIGHTS CLEARED"
+        string cleared = RunSettings.Raise > 0 ? $"RAISE {RunSettings.Raise} CLEARED" : $"ALL {ladder.Length} FIGHTS CLEARED";
+        endStats.text = won ? cleared + (opened > 0 ? $" · RAISE {opened} OPEN" : "")
                             : $"ACT {Act} · FIGHT {Fight} · BEATEN BY {ladder[Fight - 1].displayName.ToUpper()}";
         yield return rig.MoveTo(monitorView);
 
@@ -522,16 +632,17 @@ public class GameController : MonoBehaviour
         public int next;
     }
 
-    public static int Evaluate(List<FaceDefinition> faces) => Count(faces, null);
-    public static List<CountStep> CountSteps(List<FaceDefinition> faces)
+    // sevenValue: what a 7 counts as. 7, except on your side with Lucky Seven (14): 7 × 3 = 42, and 7 5 = 145
+    public static int Evaluate(List<FaceDefinition> faces, int sevenValue = 7) => Count(faces, null, sevenValue);
+    public static List<CountStep> CountSteps(List<FaceDefinition> faces, int sevenValue = 7)
     {
         List<CountStep> steps = new List<CountStep>();
-        Count(faces, steps);
+        Count(faces, steps, sevenValue);
         return steps;
     }
 
     // The ONE place maths happens. Evaluate and the count animation both run this, so they can never disagree.
-    private static int Count(List<FaceDefinition> faces, List<CountStep> record)
+    private static int Count(List<FaceDefinition> faces, List<CountStep> record, int sevenValue = 7)
     {
         // 1. Faces → two lists. "5 + 9 0 ÷ 5" becomes numbers [5, 90, 5] and ops [+, ÷]
         List<int> numbers = new List<int>();
@@ -541,7 +652,8 @@ public class GameController : MonoBehaviour
         {
             if (face.type == FaceType.Number)
             {
-                current = current * 10 + face.number;   // digits next to each other join: 9 then 0 → 90
+                int digit = face.number == 7 ? sevenValue : face.number;   // Lucky Seven: a 14 in a 7's place adds 7 there
+                current = current * 10 + digit;   // digits next to each other join: 9 then 0 → 90
             }
             else
             {
@@ -653,7 +765,7 @@ public class GameController : MonoBehaviour
         switch (Table)
         {
             case TableType.Low:
-                return -Mathf.Min(Mathf.Abs(result) + bust, lowCap) * player.Stake;
+                return -Mathf.Min(Mathf.Abs(result) + bust, LowCap) * player.Stake;
             case TableType.Target:
                 return -(Mathf.Abs(result - Target) + bust);
             case TableType.Limit:
@@ -678,7 +790,7 @@ public class GameController : MonoBehaviour
         {
             switch (Table)
             {
-                case TableType.Low: return -lowCap * player.Stake;
+                case TableType.Low: return -LowCap * player.Stake;
                 case TableType.Target: return -(Mathf.Abs(Target) + OperatorBustPenalty);   // a result of 0 plus a bust
                 default: return 0;
             }
@@ -690,6 +802,42 @@ public class GameController : MonoBehaviour
     {
         return Table == TableType.High || Table == TableType.Limit ? $" - {penalty}" : $" · BUST +{penalty}";   
     }
+
+    // ---------- Enemy pools ----------
+
+    // One enemy per fight. Slots set: a random one from each slot's pool. No slots: the Ladder as it is.
+    private EnemyDefinition[] RollLadder()
+    {
+        if (slots == null || slots.Length == 0) return ladder;
+        EnemyDefinition[] run = new EnemyDefinition[slots.Length];
+        for (int i = 0; i < slots.Length; i++)
+        {
+            List<EnemyDefinition> pool = new List<EnemyDefinition>();
+            if (slots[i] != null && slots[i].enemies != null)
+                foreach (EnemyDefinition e in slots[i].enemies) if (e != null) pool.Add(e);
+            if (pool.Count > 0) run[i] = pool[Random.Range(0, pool.Count)];
+            else if (ladder != null && i < ladder.Length) run[i] = ladder[i];   // an empty slot falls back to the old ladder
+            if (run[i] == null) Debug.LogError($"[Carry the One] GameController: slot {i + 1} has no enemy.");
+        }
+        return run;
+    }
+
+    // Act bosses hand over a die; the last fight is the final boss
+    private bool IsBossFight(EnemyDefinition def) => def.dieDrop != null || Fight == ladder.Length;
+
+#if UNITY_EDITOR
+    // Turns the Ladder into Slots, one enemy each, so you only have to add the variants
+    [ContextMenu("Copy Ladder Into Slots")]
+    private void CopyLadderIntoSlots()
+    {
+        if (ladder == null || ladder.Length == 0) { Debug.LogWarning("[Carry the One] The Ladder is empty, nothing to copy."); return; }
+        UnityEditor.Undo.RecordObject(this, "Copy Ladder Into Slots");
+        slots = new LadderSlot[ladder.Length];
+        for (int i = 0; i < ladder.Length; i++) slots[i] = new LadderSlot { enemies = new[] { ladder[i] } };
+        UnityEditor.EditorUtility.SetDirty(this);
+        Debug.Log($"[Carry the One] {slots.Length} slots made from the Ladder. Add variants to each slot's Enemies list.");
+    }
+#endif
 
     // ---------- Relics ----------
 
@@ -719,8 +867,8 @@ public class GameController : MonoBehaviour
         int found = 0;
         if (relicPool != null) foreach (RelicDefinition r in relicPool) if (r != null) found++;
         if (found == 0)
-            Debug.LogError("[Carry the One] GameController > Relic Pool is empty, so there are no relic screens after fights 4, 8 and 16. " +
-                           "Drag the five Relic_ assets in, or right-click the GameController component > Find Relic Assets.");
+            Debug.LogError("[Carry the One] GameController > Relic Pool is empty, so there are no relic screens after the Relic Fights. " +
+                           "Drag the Relic_ assets in, or right-click the GameController component > Find Relic Assets.");
         else if (relicBar == null && (relicSlots == null || relicSlots.Length == 0))
             Debug.LogWarning("[Carry the One] GameController has no Relic Bar, so the relics you hold never show. " +
                              "Make an empty UI object on your HUD canvas and drag it into Relic Bar.");
@@ -776,6 +924,8 @@ public class GameController : MonoBehaviour
         string text = $"{relic.displayName.ToUpper()} · {relic.line.ToUpper()}";
         if (relic.type == RelicType.Insurance && player.InsuranceUsed) text += " · USED";
         if (relic.type == RelicType.RabbitsFoot && !player.RabbitsFootReady) text += " · USED THIS FIGHT";
+        if (relic.type == RelicType.DoubleDown && doubleDownFight == Fight) text += doubleDownArmed ? " · ON THIS ROUND" : " · USED THIS FIGHT";
+        if (relic.type == RelicType.OppositeDay && oppositeDayAct == Act) text += " · USED THIS ACT";
         relicTooltip.text = text;
     }
 
@@ -843,7 +993,9 @@ public class GameController : MonoBehaviour
             RelicIcon hover = relicSlots[i].GetComponent<RelicIcon>();
             if (hover != null) hover.Relic = r;
             bool spent = (r.type == RelicType.Insurance && player.InsuranceUsed)
-                      || (r.type == RelicType.RabbitsFoot && !player.RabbitsFootReady);
+                      || (r.type == RelicType.RabbitsFoot && !player.RabbitsFootReady)
+                      || (r.type == RelicType.DoubleDown && doubleDownFight == Fight && !doubleDownArmed)
+                      || (r.type == RelicType.OppositeDay && oppositeDayAct == Act);
             Color c = relicSlots[i].color;
             c.a = spent ? spentRelicAlpha : 1f;
             relicSlots[i].color = c;
@@ -917,7 +1069,35 @@ public class GameController : MonoBehaviour
         return steps;
     }
 
-    private IEnumerator PlayMargin(List<CountStep> steps, int amount, float intensity, bool roll)
+    // Adds "× 2" to the end of the margin count: [41 - 18], [23] becomes [41 - 18], [23 × 2], [46]
+    private static void MultiplyMargin(List<CountStep> steps, int multiplier)
+    {
+        CountStep last = steps[steps.Count - 1];
+        int amount = last.numbers[0];
+        steps[steps.Count - 1] = new CountStep { numbers = new List<int> { amount, multiplier }, ops = new List<Operator> { Operator.Multiply }, next = 0 };
+        steps.Add(new CountStep { numbers = new List<int> { amount * multiplier }, ops = new List<Operator>(), next = -1 });
+    }
+
+    // An exact hit: the target at a Target table, 0 at a Low table, the limit itself at a Limit table (a bust never counts)
+    private bool IsBullseye(int score)
+    {
+        switch (Table)
+        {
+            case TableType.Target:
+            case TableType.Low: return score == 0;
+            case TableType.Limit: return Target > 0 && score == Target;
+            default: return false;
+        }
+    }
+
+    private static bool IsPrime(int n)
+    {
+        if (n < 2) return false;
+        for (int k = 2; k * k <= n; k++) if (n % k == 0) return false;
+        return true;
+    }
+
+    private IEnumerator PlayMargin(List<CountStep> steps, int amount, float intensity, bool roll, bool isPlayerDiff)
     {
         if (scoreFadeRoutine != null) StopCoroutine(scoreFadeRoutine);
         scoreText.color = Color.white;
@@ -931,9 +1111,13 @@ public class GameController : MonoBehaviour
             strip.Flash("PHOTO FINISH", Color.yellow, 3f);
         }
 
-        int knockoutAt = score > 0 ? enemy.Health : 0;   // only your hits knock out
-        yield return counter.PlayMargin(scoreText, steps, roll ? scoreCounter : null, intensity, knockoutAt, Knockout);
-        counter.Speed = 1f;
+        int knockoutAt = score > 0 ? enemy.Health : 0;
+        float oldSpeed = counter.Speed;
+        if (isPlayerDiff) counter.Speed = 0.6f;   // ~1.8× longer. Tune to taste (0.4–0.7)
+
+        yield return counter.PlayMargin(scoreText, steps, roll ? scoreCounter : null, intensity, knockoutAt, Knockout, isPlayerDiff);
+
+        counter.Speed = oldSpeed;  
     }
 
     // The damage count just passed the enemy's HP: this hit kills (the tubes still have to get there)
@@ -1012,7 +1196,7 @@ public class GameController : MonoBehaviour
         bool roll = diff > 0 && intensity >= rollThreshold;
 
         // ---- 1. ANTICIPATION ----
-        yield return PlayMargin(margin, Mathf.Abs(diff), intensity, roll);
+        yield return PlayMargin(margin, Mathf.Abs(diff), intensity, roll, diff > 0);
 
         // ---- 2. IMPACT: the number lands. No damage yet: the HP tubes aren't on screen ----
         PlayResultFeedback(diff);
@@ -1109,4 +1293,11 @@ public class GameController : MonoBehaviour
         player.ResetRound();
         StartCoroutine(BeginFight());
     }
+}
+
+// One fight on the ladder: the enemies it can be. Each run picks one of them at random.
+[System.Serializable]
+public class LadderSlot
+{
+    public EnemyDefinition[] enemies;
 }

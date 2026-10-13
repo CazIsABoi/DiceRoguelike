@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
+  m_Name: Nil
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  displayName: NIL
+  maxHP: 7
+  dice:
+  - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
+  - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
+  - {fileID: 11400000, guid: fcb716d0f675a204c980691f47e48693, type: 2}
+  layout: {fileID: 11400000, guid: 7c23da8478adfaa42a56f331a5c41966, type: 2}
+  brain: 2
+  traits: []
+  throwAttempts: 1
+  blunderChance: 0
+  rethrowBelow: 2
+  minGain: 0
+  voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  table: 1
+  targetRange: {x: 10, y: 40}
+  portrait: {fileID: 0}
+  portraitTalk: {fileID: 0}
+  intro: Nothing. That's what I'm after. Nothing at all.
+  rerollLines:
+  - Too much.
+  - Less.
+  - Still something.
+  keepLines:
+  - Close to nothing.
+  - Barely there.
+  winLines:
+  - Nothing beats nothing.
+  - Zero. Feel it.
+  loseLines:
+  - You found less than me?
+  - Emptier than I thought.
+  bustLines:
+  - That's... something.
+  defeatLine: Back to nothing.
+  unlockFaces:
+  - {fileID: 11400000, guid: 83c643d52ed689b46a4b9ab4770eea56, type: 2}
+  dieDrop: {fileID: 0}

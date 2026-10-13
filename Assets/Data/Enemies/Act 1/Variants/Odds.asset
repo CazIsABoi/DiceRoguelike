@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
+  m_Name: Odds
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  displayName: ODDS
+  maxHP: 9
+  dice:
+  - {fileID: 11400000, guid: c0b7c8eb07e44ff46aca0d944a0896a9, type: 2}
+  - {fileID: 11400000, guid: c0b7c8eb07e44ff46aca0d944a0896a9, type: 2}
+  - {fileID: 11400000, guid: c0b7c8eb07e44ff46aca0d944a0896a9, type: 2}
+  - {fileID: 11400000, guid: b4b43e029f03c974e82994d370f8daa8, type: 2}
+  - {fileID: 11400000, guid: b4b43e029f03c974e82994d370f8daa8, type: 2}
+  layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
+  brain: 0
+  traits: []
+  throwAttempts: 1
+  blunderChance: 0
+  rethrowBelow: 2
+  minGain: 0
+  voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
+  portrait: {fileID: 0}
+  portraitTalk: {fileID: 0}
+  intro: Never even. Never have been.
+  rerollLines:
+  - Odd.
+  - Again.
+  - Stranger.
+  keepLines:
+  - Odd. Perfect.
+  - Another odd one.
+  winLines:
+  - Odds are with me.
+  - Beat the odds? Not today.
+  loseLines:
+  - Even you got lucky.
+  - Odd.
+  bustLines:
+  - Oddly unlucky.
+  defeatLine: Against all odds.
+  unlockFaces:
+  - {fileID: 11400000, guid: 314e91faef7426a4bb4886b709de9119, type: 2}
+  dieDrop: {fileID: 0}

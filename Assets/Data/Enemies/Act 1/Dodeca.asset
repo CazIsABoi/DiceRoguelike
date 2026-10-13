@@ -23,7 +23,7 @@ MonoBehaviour:
   layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
   brain: 2
   traits: []
-  throwAttempts: 2
+  throwAttempts: 1
   blunderChance: 0
   rethrowBelow: 4
   minGain: 3

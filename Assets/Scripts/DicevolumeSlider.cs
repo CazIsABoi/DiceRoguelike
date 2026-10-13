@@ -32,7 +32,6 @@ public class DiceVolumeSlider : MonoBehaviour
 
     private void OnSlider(float value)
     {
-        DiceAudio.Volume = value;
         if (previewClip != null && previewSource != null && !previewSource.isPlaying)
             previewSource.PlayOneShot(previewClip, value);
     }

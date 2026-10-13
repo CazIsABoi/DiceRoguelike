@@ -433,6 +433,12 @@ MonoBehaviour:
   rollSpin: 2.5
   randomSpin: 4
   flickWindow: 0.08
+  slamLift: 5
+  slamLiftTime: 0.05
+  slamHangTime: 0.1
+  slamDropTime: 0.16
+  slamSpin: 1200
+  slamJitter: 0.08
   freeRollTime: 0.8
   settleDamping: 5
   settleRampTime: 0.7
@@ -450,6 +456,7 @@ MonoBehaviour:
   shakeFullSpeed: 6
   shakeIdleVolume: 0.15
   shakeFade: 10
+  dustMinSpeed: 3
 --- !u!114 &4062360055529501214
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -478,7 +485,7 @@ MonoBehaviour:
   faceCount: 12
   faceScale: 1
   faceDepth: 1
-  testDefinition: {fileID: 11400000, guid: d40a6186bc2bbcf4b95aa4c8f07892d3, type: 2}
+  testDefinition: {fileID: 0}
   blankFace: {fileID: 11400000, guid: ae16b36ba5075b04fbd44b195af56a49, type: 2}
   flyForce: 2
   spin: 5

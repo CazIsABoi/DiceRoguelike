@@ -5,29 +5,9 @@ using UnityEngine;
 //   DiceAudio.Volume = 0.5f;   // from anywhere
 public static class DiceAudio
 {
-    private const string Key = "DiceVolume";
-    private static float volume = -1f;   // -1 = not loaded yet
 
-    public static event System.Action<float> OnChanged;
-
-    public static float Volume
-    {
-        get
-        {
-            if (volume < 0f) volume = PlayerPrefs.GetFloat(Key, 1f);
-            return volume;
-        }
-        set
-        {
-            volume = Mathf.Clamp01(value);
-            PlayerPrefs.SetFloat(Key, volume);
-            OnChanged?.Invoke(volume);
-        }
-    }
+    public static float Volume => GameSettings.Dice;
 
     // Call once when leaving a settings screen (or on quit), so the value is written to disk now
     public static void Save() => PlayerPrefs.Save();
-
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void ResetStatics() { volume = -1f; OnChanged = null; }   // in case domain reload is off
 }

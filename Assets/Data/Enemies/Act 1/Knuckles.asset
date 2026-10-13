@@ -13,13 +13,13 @@ MonoBehaviour:
   m_Name: Knuckles
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Knuckles
-  maxHP: 23
+  maxHP: 64
   dice:
-  - {fileID: 11400000, guid: 2e82001ac9c37c9469eea2d15951441c, type: 2}
+  - {fileID: 11400000, guid: 1dff52690b458ad4f8f484c5287427be, type: 2}
   - {fileID: 11400000, guid: b4b43e029f03c974e82994d370f8daa8, type: 2}
-  - {fileID: 11400000, guid: 2e82001ac9c37c9469eea2d15951441c, type: 2}
+  - {fileID: 11400000, guid: 1dff52690b458ad4f8f484c5287427be, type: 2}
   - {fileID: 11400000, guid: b4b43e029f03c974e82994d370f8daa8, type: 2}
-  - {fileID: 11400000, guid: 2e82001ac9c37c9469eea2d15951441c, type: 2}
+  - {fileID: 11400000, guid: 1dff52690b458ad4f8f484c5287427be, type: 2}
   layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
   brain: 1
   traits: []

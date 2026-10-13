@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: The Bouncer
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: The Bouncer
-  maxHP: 3000
+  maxHP: 3100
   dice:
   - {fileID: 11400000, guid: 2e82001ac9c37c9469eea2d15951441c, type: 2}
   - {fileID: 11400000, guid: 2e82001ac9c37c9469eea2d15951441c, type: 2}

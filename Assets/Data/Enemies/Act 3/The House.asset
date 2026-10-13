@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: The House
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: The House
-  maxHP: 10500
+  maxHP: 6600
   dice:
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}

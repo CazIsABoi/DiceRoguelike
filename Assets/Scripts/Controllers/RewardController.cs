@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Audio;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
@@ -61,6 +62,26 @@ public class RewardController : MonoBehaviour
     [SerializeField] private Sprite keepIcon;             // "keep your die" on the spare swap screen
     [SerializeField] private TMP_Text offerDescription;   // one big text under the row of offers
 
+    [Header("The New Slot")]   // every screen: one face, one special (heal or Grow), one of these
+    [SerializeField] private FaceDefinition[] numberFaces;   // 10 slots, slot N = the face for N (slot 0 can stay empty): Gamble, Pair and Polish use them
+    [SerializeField] private ChipTray chipTray;
+    [SerializeField] private ChipDefinition[] chipPool;      // the chips a reward can hand out
+    [SerializeField] private Sprite gambleIcon;
+    [SerializeField] private Sprite pairIcon;
+    [SerializeField] private Sprite polishIcon;
+    [SerializeField] private Sprite maxHpIcon;
+    [SerializeField] private bool offerChips = true, offerGamble = true, offerPair = true, offerPolish = true, offerMaxHp = true;
+    [SerializeField] private int pairNumber = 5;             // Pair: this number on two different dice
+    [SerializeField, Range(5, 50)] private int maxHpPercent = 20;
+    private int MaxHpPercent => Mathf.Max(1, Mathf.RoundToInt(maxHpPercent * RunSettings.RaiseMaxHpRewardMultiplier));   // Raise (Skimmed)
+    [SerializeField, Range(0f, 1f)] private float multiplyChance = 0.5f;   // once you own a ×, the face is a × this often (while a die has room)
+
+    [Header("Gamble Sound")]   // the nixie's tick and lock clips work well here
+    [SerializeField] private AudioClip gambleTickClip;       // each number the reel flicks past
+    [SerializeField] private AudioClip gambleLandClip;       // the number it stops on
+    [SerializeField] private AudioMixerGroup sfxOutput;      // your SFX group, so the volume slider covers it
+    [SerializeField, Range(0f, 1f)] private float gambleVolume = 0.7f;
+
     [Header("Relic Reveal")]
     [SerializeField] private float relicRevealTime = 2.2f;   // the picked relic stays big on the screen this long
     private string screenPrompt = "PICK A REWARD";        // what the sign says when nothing is hovered
@@ -102,7 +123,7 @@ public class RewardController : MonoBehaviour
     // ---------- Entry point ----------
 
     // GameController does: yield return reward.RewardRoutine(player, facePool.ToArray(), beaten.unlockFaces, heal, relicChoices);
-    // relicChoices is null except after the relic fights (4, 8 and 16): then a relic screen follows the reward.
+    // relicChoices is null except after the Relic Fights (GameController): then a relic screen follows the reward.
     public IEnumerator RewardRoutine(PlayerController player, FaceDefinition[] facePool, FaceDefinition[] newFaces, int healAmount,
                                      List<RelicDefinition> relicChoices = null)
     {
@@ -134,6 +155,39 @@ public class RewardController : MonoBehaviour
 
             case RewardKind.Die:                        // not offered any more (bosses hand their die over), kept just in case
                 player.AddDie(chosen.die);
+                yield return new WaitForSeconds(1f);
+                break;
+
+            case RewardKind.Gamble:                     // the number spins on the screen, then goes on a die like any face
+                int rolled = Random.Range(1, 10);
+                chosenFace = NumberFace(rolled);
+                yield return GambleRoll(rolled);
+                yield return FaceRewardRoutine(player);
+                rewardNote = "rolled " + rolled + ", " + rewardNote;
+                break;
+
+            case RewardKind.Pair:                       // the same number on two different dice
+                chosenFace = NumberFace(pairNumber);
+                Die first = null;
+                yield return FaceRewardRoutine(player, null, d => first = d);
+                string firstNote = rewardNote;
+                if (first != null) yield return FaceRewardRoutine(player, first);
+                rewardNote = firstNote + " + " + rewardNote;
+                break;
+
+            case RewardKind.Polish:
+                yield return PolishRoutine(player);
+                break;
+
+            case RewardKind.MaxHp:
+                player.AddMaxHpPercent(MaxHpPercent);
+                strip.Flash($"MAX HP {player.MaxHealth}", promptColor, 1.5f);
+                yield return new WaitForSeconds(1f);
+                break;
+
+            case RewardKind.Chip:
+                chipTray.Add(chosen.chip);
+                strip.FlashScrolling($"{chosen.chip.displayName.ToUpper()} CHIP · HOLD S TO SEE YOUR CHIPS", promptColor, 2.5f);
                 yield return new WaitForSeconds(1f);
                 break;
         }
@@ -174,7 +228,8 @@ public class RewardController : MonoBehaviour
                 kind = RewardKind.Relic,
                 relic = r,
                 icon = r.icon,
-                label = $"{r.displayName.ToUpper()} · {r.line.ToUpper()}"
+                label = r.displayName.ToUpper(),
+                description = r.line.ToUpper()
             });
         }
         strip.Show("RELICS LAST ALL RUN", promptColor);   // so it doesn't read as a second reward screen
@@ -185,11 +240,11 @@ public class RewardController : MonoBehaviour
         RelicDefinition relic = chosen.relic;
         player.AddRelic(relic);   // the relic bar pops the new icon and plays the relic sound
         strip.Flash($"NEW RELIC · {relic.displayName.ToUpper()}", promptColor, relicRevealTime);
-        yield return Reveal(relic.icon, $"{relic.displayName.ToUpper()} · {relic.line.ToUpper()}", relicRevealTime);
+        yield return Reveal(relic.icon, relic.displayName.ToUpper(), relic.line.ToUpper(), relicRevealTime);
     }
 
     // The thing you just got, alone and big in the middle of the screen, with what it does on the sign
-    private IEnumerator Reveal(Sprite icon, string text, float time)
+    private IEnumerator Reveal(Sprite icon, string text, string description, float time)
     {
         if (offerImages.Length == 0) yield break;
         rewardPanel.SetActive(true);
@@ -201,6 +256,7 @@ public class RewardController : MonoBehaviour
         middle.color = offerColor;
         middle.gameObject.SetActive(true);
         SetPrompt(promptText, text);
+        SetPrompt(offerDescription, description);
 
         Transform t = middle.transform;
         Vector3 size = t.localScale;
@@ -218,6 +274,57 @@ public class RewardController : MonoBehaviour
         rewardPanel.SetActive(false);
         equationPanel.SetActive(true);
         SetPrompt(promptText, "");
+        SetPrompt(offerDescription, "");
+    }
+
+    // The Gamble: the screen flicks through numbers like a slot reel, slows down, and lands on the roll
+    private IEnumerator GambleRoll(int result)
+    {
+        if (offerImages.Length == 0) yield break;
+        rewardPanel.SetActive(true);
+        equationPanel.SetActive(false);
+        foreach (Image image in offerImages) image.gameObject.SetActive(false);
+        Image middle = offerImages[offerImages.Length / 2];
+        middle.color = offerColor;
+        middle.gameObject.SetActive(true);
+        SetPrompt(promptText, "THE GAMBLE");
+        SetPrompt(offerDescription, "");
+
+        int shown = Random.Range(1, 10);
+        for (float step = 0.04f; step < 0.25f; step *= 1.25f)   // about a second, slowing down
+        {
+            shown = 1 + (shown + Random.Range(0, 8)) % 9;          // never the same number twice in a row
+            FaceDefinition f = NumberFace(shown);
+            if (f != null) middle.sprite = f.icon;
+            // a wheel slowing down: each click a little lower than the last
+            PlayGamble(gambleTickClip, Mathf.Lerp(1.25f, 0.85f, Mathf.InverseLerp(0.04f, 0.25f, step)), 0.6f);
+            yield return new WaitForSeconds(step);
+        }
+        PlayGamble(gambleLandClip, 1f, 1f);
+        yield return Reveal(chosenFace.icon, $"YOU ROLLED A {result}", "NOW PUT IT ON A DIE", 1.4f);
+    }
+
+    private AudioSource[] gambleVoices;   // its own, so changing the pitch never bends another sound
+    private int nextGambleVoice;
+
+    private void PlayGamble(AudioClip clip, float pitch, float loudness)
+    {
+        if (clip == null) return;
+        if (gambleVoices == null)
+        {
+            gambleVoices = new AudioSource[2];
+            for (int i = 0; i < gambleVoices.Length; i++)
+            {
+                gambleVoices[i] = gameObject.AddComponent<AudioSource>();
+                gambleVoices[i].playOnAwake = false;
+                gambleVoices[i].spatialBlend = 0f;
+                gambleVoices[i].outputAudioMixerGroup = sfxOutput;
+            }
+        }
+        AudioSource voice = gambleVoices[nextGambleVoice];
+        nextGambleVoice = (nextGambleVoice + 1) % gambleVoices.Length;
+        voice.pitch = pitch;
+        voice.PlayOneShot(clip, loudness * gambleVolume);
     }
 
     // ---------- Spare dice ----------
@@ -288,18 +395,22 @@ public class RewardController : MonoBehaviour
     }
 
     // New face: pick a die, pick a side, the new face slams onto it. A × only goes on a die under its × cap.
-    public IEnumerator FaceRewardRoutine(PlayerController player)
+    // exclude: a die that can't be picked (Pair's second face). picked: told which die got the face.
+    public IEnumerator FaceRewardRoutine(PlayerController player, Die exclude = null, System.Action<Die> picked = null)
     {
         List<Die> choices = new List<Die>();
         foreach (Die d in player.GetDice())
         {
+            if (d == exclude) continue;
             if (!IsMultiply(chosenFace) || player.HasMultiplyRoom(d)) choices.Add(d);
         }
         if (choices.Count == 0) yield break;   // can't happen: × is only offered while a die has room
 
         yield return rig.MoveTo(diceView);
         ShowChosenFace();
-        yield return PickDie(choices.ToArray(), IsMultiply(chosenFace) ? "PICK A DIE WITH ROOM FOR A ×" : "PICK A DIE");
+        string prompt = exclude != null ? $"NOW A DIFFERENT DIE FOR THE OTHER {chosenFace.number}"
+                      : IsMultiply(chosenFace) ? "PICK A DIE WITH ROOM FOR A ×" : "PICK A DIE";
+        yield return PickDie(choices.ToArray(), prompt);
         ClearChosenFace();
 
         yield return PickSide("PICK A SIDE", "RIGHT DRAG OR Q/E TO TURN · CLICK A SIDE TWICE TO PICK IT", false);
@@ -315,7 +426,49 @@ public class RewardController : MonoBehaviour
         die.transform.SetParent(homeParent, true);
         yield return MoveDieWorld(homePos, homeRot);
 
+        picked?.Invoke(die);
         die = null;
+    }
+
+    // Polish: pick a number die, every number on it goes up by 1 (a 9 stays a 9)
+    private IEnumerator PolishRoutine(PlayerController player)
+    {
+        List<Die> numberDice = player.NumberDiceInPlay();
+        if (numberDice.Count == 0) yield break;
+
+        yield return rig.MoveTo(diceView);
+        yield return PickDie(numberDice.ToArray(), "PICK A DIE TO POLISH · EVERY NUMBER +1");
+        strip.Clear();
+        FaceDefinition[] faces = die.GetCurrentFaces();
+        int raised = 0;
+        for (int i = 0; i < faces.Length; i++)
+        {
+            FaceDefinition f = faces[i];
+            if (f == null || f.type != FaceType.Number || f.number >= 9) continue;
+            FaceDefinition up = NumberFace(f.number + 1);
+            if (up == null) continue;
+            StartCoroutine(die.SwapFace(i, up));   // all at once: six slams in a row would drag
+            raised++;
+        }
+        yield return new WaitForSeconds(afterSwapPause + 0.6f);
+        player.NotifyDiceChanged();
+        rewardNote = $"{raised} faces +1";
+        strip.FlashScrolling($"POLISHED · {raised} NUMBERS WENT UP", promptColor, 1.5f);
+        die = null;
+        yield return new WaitForSeconds(1f);
+    }
+
+    // Gamble and Polish need every face from 1 to 9 in Number Faces
+    private bool HasNumberFaces()
+    {
+        for (int n = 1; n <= 9; n++) if (NumberFace(n) == null) return false;
+        return true;
+    }
+
+    private FaceDefinition NumberFace(int n)
+    {
+        if (numberFaces == null || n < 0 || n >= numberFaces.Length) return null;
+        return numberFaces[n];
     }
 
     // Grow a die: pick a number die, pick one of its numbers, it comes back one size up with copies of that number
@@ -355,7 +508,7 @@ public class RewardController : MonoBehaviour
         }
         full.transform.position = home;
         yield return new WaitForSeconds(1.2f);
-        if (phase == Phase.ChooseDie) strip.Show(pickPrompt, promptColor);   // still picking: the instruction comes back
+        if (phase == Phase.ChooseDie) strip.ShowScrolling(pickPrompt, promptColor, -1);   // still picking: the instruction comes back
     }
 
     // ---------- Shared steps ----------
@@ -366,7 +519,7 @@ public class RewardController : MonoBehaviour
         pickPrompt = prompt;
         candidates = choices;
         die = null;
-        strip.Show(prompt, promptColor);
+        strip.ShowScrolling(prompt, promptColor, -1);   // a long prompt scrolls
         phase = Phase.ChooseDie;
         yield return new WaitUntil(() => die != null);
         phase = Phase.None;
@@ -391,7 +544,7 @@ public class RewardController : MonoBehaviour
             confirmed = false;
             switchTo = null;
             lastMousePos = mousePos.action.ReadValue<Vector2>();
-            strip.Show(prompt, promptColor);
+            strip.ShowScrolling(prompt, promptColor, -1);   // a long prompt scrolls
             Tutorial.Hint("side", hint);
             phase = Phase.Inspect;
             yield return new WaitUntil(() => confirmed || switchTo != null);
@@ -487,6 +640,7 @@ public class RewardController : MonoBehaviour
 
     // ---------- Phase A: offers ----------
 
+    // Every screen: one face, one special (a heal, or Grow), and one new thing (a chip, Gamble, Pair, Polish or Max HP)
     private List<RewardOffer> BuildOffers(PlayerController player, FaceDefinition[] facePool, FaceDefinition[] newFaces, int healAmount)
     {
         List<RewardOffer> result = new List<RewardOffer>();
@@ -496,30 +650,25 @@ public class RewardController : MonoBehaviour
         xWasCapped = !player.OperatorDieHasRoom() && bag.Exists(IsMultiply);
         if (xWasCapped) bag.RemoveAll(IsMultiply);
 
-        // 1. Two different faces: what this enemy just unlocked comes first, then random ones from the pool
-        List<FaceDefinition> faces = new List<FaceDefinition>();
+        // 1. The face: one that's new to the pool (this enemy just unlocked it) first, then × while you have none (pity),
+        //    then × some of the time (it used to get two face slots), else a random one
+        FaceDefinition face = null;
         if (newFaces != null)
         {
+            List<FaceDefinition> before = new List<FaceDefinition>(facePool);
+            foreach (FaceDefinition f in newFaces) before.Remove(f);
             foreach (FaceDefinition f in newFaces)
-            {
-                if (faces.Count < 2 && !faces.Contains(f) && bag.Remove(f)) faces.Add(f);
-            }
+                if (bag.Contains(f) && !before.Contains(f)) { face = f; break; }
         }
-        while (faces.Count < 2)
-        {
-            FaceDefinition f = TakeRandom(bag, faces);
-            if (f == null) break;   // the pool ran dry
-            faces.Add(f);
-        }
+        if (face == null && bag.Exists(IsMultiply) && (!player.HasAnyMultiply() || Random.value < multiplyChance))
+            face = bag.Find(IsMultiply);
+        if (face == null) face = TakeRandom(bag, new List<FaceDefinition>());
+        if (face != null) result.Add(FaceOffer(face));
 
-        // 2. The special: a heal when you're at half HP or less, else grow a die,
-        //    else a heal if you're hurt at all, else a third face
+        // 2. The special: a heal at half HP or less (or when nothing can grow), Grow at full HP, else either
         bool low = player.Health * 2 <= player.MaxHealth;
-        if (low)
-        {
-            result.Add(HealOffer(healAmount));
-        }
-        else if (player.CanGrowAny() && Random.value < growChance)
+        bool full = player.Health >= player.MaxHealth;
+        if (!low && player.CanGrowAny() && (full || Random.value < growChance))
         {
             result.Add(new RewardOffer
             {
@@ -529,19 +678,13 @@ public class RewardController : MonoBehaviour
                 description = "ONE DIE GETS MORE SIDES, COPYING A NUMBER YOU PICK"
             });
         }
-        else if (player.Health < player.MaxHealth)
-        {
-            result.Add(HealOffer(healAmount));
-        }
-        else
-        {
-            FaceDefinition f = TakeRandom(bag, faces);
-            if (f != null) faces.Add(f);
-        }
+        else result.Add(HealOffer(healAmount));
 
-        foreach (FaceDefinition f in faces) result.Add(FaceOffer(f));
+        // 3. The new thing
+        RewardOffer extra = NewOffer(player);
+        if (extra != null) result.Add(extra);
 
-        // 3. Shuffle, so the special isn't always in the same spot
+        // Shuffle, so the special isn't always in the same spot
         for (int i = 0; i < result.Count; i++)
         {
             int j = Random.Range(i, result.Count);
@@ -549,8 +692,39 @@ public class RewardController : MonoBehaviour
             result[i] = result[j];
             result[j] = temp;
         }
-
         return result;
+    }
+
+    private RewardOffer NewOffer(PlayerController player)
+    {
+        List<RewardKind> kinds = new List<RewardKind>();
+        if (offerChips && chipTray != null && chipTray.HasRoom && chipPool != null && chipPool.Length > 0) kinds.Add(RewardKind.Chip);
+        if (offerGamble && HasNumberFaces()) kinds.Add(RewardKind.Gamble);
+        if (offerPair && NumberFace(pairNumber) != null && player.NumberDiceInPlay().Count >= 2) kinds.Add(RewardKind.Pair);
+        if (offerPolish && HasNumberFaces()) kinds.Add(RewardKind.Polish);
+        if (offerMaxHp) kinds.Add(RewardKind.MaxHp);
+        if (kinds.Count == 0) return null;
+
+        switch (kinds[Random.Range(0, kinds.Count)])
+        {
+            case RewardKind.Chip:
+                ChipDefinition chip = chipPool[Random.Range(0, chipPool.Length)];
+                return new RewardOffer { kind = RewardKind.Chip, chip = chip, icon = chip.icon,
+                                         label = chip.displayName.ToUpper() + " CHIP",
+                                         description = chip.line.ToUpper() + " · ONE USE, ON YOUR TURN" };
+            case RewardKind.Gamble:
+                return new RewardOffer { kind = RewardKind.Gamble, icon = gambleIcon, label = "THE GAMBLE",
+                                         description = "A NUMBER FROM 1 TO 9, ROLLED WHEN YOU TAKE IT" };
+            case RewardKind.Pair:
+                return new RewardOffer { kind = RewardKind.Pair, icon = pairIcon, label = $"A PAIR OF {pairNumber}S",
+                                         description = $"A {pairNumber} ON TWO DIFFERENT DICE" };
+            case RewardKind.Polish:
+                return new RewardOffer { kind = RewardKind.Polish, icon = polishIcon, label = "POLISH",
+                                         description = "EVERY NUMBER ON ONE DIE GOES UP BY 1" };
+            default:
+                return new RewardOffer { kind = RewardKind.MaxHp, icon = maxHpIcon, label = $"+{MaxHpPercent}% MAX HP",
+                                         description = "MORE MAX HP FOR THE REST OF THE RUN, AND THAT MUCH HP NOW" };
+        }
     }
 
     // A random face from the bag that isn't already offered, or null if there's none left.
@@ -573,7 +747,7 @@ public class RewardController : MonoBehaviour
     private RewardOffer FaceOffer(FaceDefinition f)
     {
         string what = f.type == FaceType.Number ? $"PUT A {f.number} ON ONE SIDE OF ANY DIE"
-                    : IsMultiply(f) ? "MULTIPLY: TURNS 6 AND 7 INTO 42 · ONLY ON A DIE WITH ROOM"
+                    : IsMultiply(f) ? "MULTIPLY: 6 AND 7 MAKE 42 · A DIE HOLDS 1 × PER 3 SIDES"
                     : $"PUT A {GameController.OpSymbol(f.op)} ON ONE SIDE OF ANY DIE";
         return new RewardOffer { kind = RewardKind.Face, face = f, icon = f.icon, label = "NEW FACE", description = what };
     }
@@ -806,7 +980,7 @@ public class RewardController : MonoBehaviour
         isSnapping = false;
     }
 
-    public enum RewardKind { Face, Die, Heal, Grow, Relic, Keep, Swap }
+    public enum RewardKind { Face, Die, Heal, Grow, Relic, Keep, Swap, Chip, Gamble, Pair, Polish, MaxHp }
 
     public class RewardOffer
     {
@@ -815,6 +989,7 @@ public class RewardController : MonoBehaviour
         public DieDefinition die;     // kind == Die
         public int heal;              // kind == Heal
         public RelicDefinition relic; // kind == Relic
+        public ChipDefinition chip;   // kind == Chip
         public Sprite icon;           // what the dot screen shows
         public string label;          // what the sign says when you hover it
         public string description;    // what the sign says when you hover it
@@ -828,6 +1003,7 @@ public class RewardController : MonoBehaviour
             case RewardKind.Face: return Telemetry.Name(o.face);
             case RewardKind.Die: return Telemetry.Name(o.die);
             case RewardKind.Relic: return Telemetry.Name(o.relic);
+            case RewardKind.Chip: return "chip " + (o.chip != null ? o.chip.displayName.ToLower() : "");
             default: return o.kind.ToString().ToLower();   // heal, grow, keep, swap
         }
     }
@@ -839,4 +1015,24 @@ public class RewardController : MonoBehaviour
         return names;
     }
 
+    // Act bosses: pick 1 of a few dice (GameController rolls them from the Boss Dice Pool). It joins your number dice.
+    public IEnumerator BossDieRoutine(PlayerController player, List<DieDefinition> choices)
+    {
+        cameraController.LookEnabled = false;
+        yield return rig.MoveTo(monitorView);
+
+        offers = new List<RewardOffer>();
+        foreach (DieDefinition d in choices)
+            offers.Add(new RewardOffer { kind = RewardKind.Die, die = d, icon = d.icon, label = DieName(d), description = DieAbout(d) });
+        yield return ChooseOnScreen("PICK YOUR NEW DIE");
+
+        player.AddDie(chosen.die);
+        Telemetry.Choice("bossdie", choices.ConvertAll(d => Telemetry.Name(d)), Telemetry.Name(chosen.die));
+        yield return rig.MoveTo(tableView);   // watch it drop in
+        cameraController.LookEnabled = true;
+    }
+
+    // The sign when you hover a boss die: its name on top, its line (or its faces, if it has no line) underneath
+    private static string DieName(DieDefinition def) => (string.IsNullOrEmpty(def.displayName) ? def.name : def.displayName).ToUpper();
+    private static string DieAbout(DieDefinition def) => (string.IsNullOrEmpty(def.line) ? FaceList(def) : def.line).ToUpper();
 }

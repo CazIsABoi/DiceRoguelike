@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Lucky Lou
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Lucky Lou
-  maxHP: 22
+  maxHP: 23
   dice:
   - {fileID: 11400000, guid: a39690b01d3a67e4dacc6c15c5e7c5dd, type: 2}
   - {fileID: 11400000, guid: 482aa2a32b0f9284c8b4b3b4f70bf6c5, type: 2}
@@ -52,5 +52,5 @@ MonoBehaviour:
   - Snake eyes on the felt...
   defeatLine: Keep the lucky one. I'm out.
   unlockFaces:
-  - {fileID: 11400000, guid: ab304ee57c3df5544b6a152fb5baf412, type: 2}
+  - {fileID: 11400000, guid: 314e91faef7426a4bb4886b709de9119, type: 2}
   dieDrop: {fileID: 0}

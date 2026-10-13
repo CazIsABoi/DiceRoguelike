@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using static UnityEngine.Rendering.RayTracingAccelerationStructure;
 
 public class PlayerController : DiceSide
 {
@@ -29,6 +30,7 @@ public class PlayerController : DiceSide
     [SerializeField] private float speedUp = 3f;   // how fast time runs while you hold Shift and dice are rolling
 
     public int NumberDice { get; private set; }
+    public int HpBonusPercent { get; private set; }         // the Max HP reward: +20% each time, kept when a boss die adds a zero
     public int Stake { get; private set; } = 1;             // 1, 10, 100: one more zero for every number die past two
 
     private readonly List<RelicType> relics = new List<RelicType>();
@@ -45,8 +47,9 @@ public class PlayerController : DiceSide
 
     private void Start()
     {
+        HpBonusPercent = RunSettings.RaiseStartingHpPercent;   // Raise (Short Stack): starts below 0, the Max HP reward adds to it
         InitHealth(baseHealth);
-        SpawnDice(die);
+        SpawnDice(RunSettings.StartingDice(die));
         RebuildSlots();
         RefreshEquation(true);
     }
@@ -73,6 +76,8 @@ public class PlayerController : DiceSide
 
     public static bool IsNumberDie(Die d)
     {
+        if (d.Role == DieRole.Number) return true;
+        if (d.Role == DieRole.Operator) return false;
         int opSides = 0;
         int numSides = 0;
         foreach (FaceDefinition face in d.GetCurrentFaces())
@@ -99,7 +104,7 @@ public class PlayerController : DiceSide
         // 2 number dice = 100, 3 = 1,000, 4 = 10,000. Current HP keeps the same share (63/100 becomes 630/1000).
         Stake = 1;
         for (int i = 2; i < numbers; i++) Stake *= 10;
-        SetMaxHealthKeepRatio(baseHealth * Stake);
+        SetMaxHealthKeepRatio(baseHealth * Stake * (100 + HpBonusPercent) / 100);
 
         operators = Mathf.Min(operators, numbers - 1);
         SpawnSlots(GenerateLayout(numbers, operators));
@@ -190,6 +195,7 @@ public class PlayerController : DiceSide
         grown.displayName = shape.displayName;
         grown.icon = shape.icon;
         grown.faceDefinitions = faces;
+        grown.role = oldDie.Role;
 
         Die newDie = SpawnOneDie(grown);
         int index = System.Array.IndexOf(spawnedDice, oldDie);
@@ -379,5 +385,53 @@ public class PlayerController : DiceSide
         Rigidbody rb = d.GetComponent<Rigidbody>();
         if (rb != null) rb.isKinematic = true;
         d.gameObject.SetActive(false);
+    }
+    // The Max HP reward: max HP goes up by 'percent' of the base, and you get that much HP on top
+    public void AddMaxHpPercent(int percent)
+    {
+        int before = Health;
+        int oldMax = MaxHealth;
+        HpBonusPercent += percent;
+        int newMax = baseHealth * Stake * (100 + HpBonusPercent) / 100;
+        SetMaxHealthKeepRatio(newMax);
+        Heal(before + (newMax - oldMax) - Health);   // the new HP arrives full, on top of what you had
+    }
+
+    // Double Down has to be called before the round's first throw: true while every die is still hovering
+    public bool NoDiceThrownYet
+    {
+        get
+        {
+            foreach (Die d in spawnedDice)
+                if (d != null && d.GetComponent<DiceController>().State != DieState.Hovering) return false;
+            return true;
+        }
+    }
+
+    // Lucky Seven: at High tables your 7s count as 14 (GameController's Lucky Seven Bonus), before the maths
+    public override int SevenValue =>
+        HasRelic(RelicType.LuckySeven) && Game != null && Game.Table == TableType.High ? Game.LuckySevenValue : 7;
+
+    // The Extra Throw chip: every die still in play gets one more throw this round. Returns how many got one.
+    public int AddThrowToAll()
+    {
+        int given = 0;
+        foreach (Die d in spawnedDice)
+        {
+            if (d == null) continue;
+            DiceController c = d.GetComponent<DiceController>();
+            if (c.State != DieState.Hovering && c.State != DieState.Resting) continue;   // locked in, busted, or in the air
+            c.SetThrowAttempts(c.GetThrowAttempts() + 1);
+            given++;
+        }
+        return given;
+    }
+
+    public bool HasAnyMultiply()
+    {
+        foreach (Die die in GetDice())
+            foreach (FaceDefinition f in die.GetCurrentFaces())
+                if (f != null && f.type == FaceType.Operator && f.op == Operator.Multiply) return true;
+        return false;
     }
 }

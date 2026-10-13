@@ -16,6 +16,8 @@ public class DevPanel : MonoBehaviour
     [SerializeField] private RelicDefinition[] relics;
     [SerializeField] private DieDefinition[] dice;      // e.g. Die_D20_Gold: the act-boss dice, for Act 2/3 scenarios
     [SerializeField] private FaceDefinition[] faces;    // faces you can carve onto a die (Face_9, Face_Multiply...)
+    [SerializeField] private ChipTray chipTray;
+    [SerializeField] private ChipDefinition[] chips;    // Chip_Reroll, Chip_Snatch...
     public enum RollMode { Normal, Best, Worst }
     public static RollMode EnemyRoll;
 
@@ -85,6 +87,19 @@ public class DevPanel : MonoBehaviour
         {
             if (r == null || player.HasRelic(r.type)) continue;
             if (GUILayout.Button(r.displayName)) player.AddRelic(r);
+        }
+        if (chipTray != null && chips != null && chips.Length > 0)
+        {
+            GUILayout.Label(chipTray.HasRoom ? "<b>Give chip</b>" : "<b>Give chip</b> (the tray is full)", Rich());
+            GUILayout.BeginHorizontal();
+            foreach (ChipDefinition c in chips)
+            {
+                if (c == null) continue;
+                GUI.enabled = chipTray.HasRoom;
+                if (GUILayout.Button(c.displayName)) chipTray.Add(c);
+                GUI.enabled = true;
+            }
+            GUILayout.EndHorizontal();
         }
         GUILayout.Label("<b>Give die</b> (one more digit, ×10 max HP)", Rich());
         foreach (DieDefinition d in dice)

@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
+  m_Name: Enemy_Whale
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  displayName: WHALE
+  maxHP: 2000
+  dice:
+  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
+  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
+  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
+  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
+  layout: {fileID: 11400000, guid: 0b56f05ea8c8fe344985de5708e756f0, type: 2}
+  brain: 0
+  traits: []
+  throwAttempts: 1
+  blunderChance: 0
+  rethrowBelow: 2
+  minGain: 0
+  voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
+  table: 0
+  targetRange: {x: 10, y: 40}
+  portrait: {fileID: 0}
+  portraitTalk: {fileID: 0}
+  intro: I don't count chips. I count digits. Four of them.
+  rerollLines:
+  - Splash.
+  - Again.
+  keepLines:
+  - Pocket change.
+  - Big.
+  winLines:
+  - Splash.
+  - That's how whales play.
+  loseLines:
+  - Beached.
+  - Small fry got lucky.
+  bustLines:
+  - Belly flop.
+  defeatLine: Cash me out.
+  unlockFaces:
+  - {fileID: 11400000, guid: ab304ee57c3df5544b6a152fb5baf412, type: 2}
+  dieDrop: {fileID: 0}

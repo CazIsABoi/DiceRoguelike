@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4fb834249c48bbe4ca0ac27481bd7447, type: 3}
+  m_Name: RaiseTable
+  m_EditorClassIdentifier: Assembly-CSharp::RaiseTable
+  levels:
+  - displayName: HOUSE EDGE
+    line: ENEMIES HAVE 5% MORE HP
+    rule: 0
+    amount: 5
+    face: {fileID: 0}
+    trait: {fileID: 0}
+  - displayName: PIT WATCH
+    line: BOSSES HAVE 15% MORE HP
+    rule: 9
+    amount: 15
+    face: {fileID: 0}
+    trait: {fileID: 0}
+  - displayName: LOW BLOW
+    line: MISSES AT LOW TABLES COST MORE
+    rule: 10
+    amount: 10
+    face: {fileID: 0}
+    trait: {fileID: 0}
+  - displayName: SHORT STACK
+    line: YOU HAVE 5% LESS MAX HP
+    rule: 1
+    amount: 5
+    face: {fileID: 0}
+    trait: {fileID: 0}
+  - displayName: NO COMPS
+    line: HEALS ARE A QUARTER SMALLER
+    rule: 2
+    amount: 75
+    face: {fileID: 0}
+    trait: {fileID: 0}
+  - displayName: SKIMMED
+    line: MAX HP REWARDS GIVE HALF
+    rule: 11
+    amount: 50
+    face: {fileID: 0}
+    trait: {fileID: 0}
+  - displayName: TIGHT TABLE
+    line: RELIC SCREENS SHOW 2 RELICS
+    rule: 5
+    amount: 2
+    face: {fileID: 0}
+    trait: {fileID: 0}
+  - displayName: BAD BEAT
+    line: YOUR BEST NUMBER STARTS AS A 1
+    rule: 6
+    amount: 0
+    face: {fileID: 11400000, guid: f7de75a565c984945809e2b275413372, type: 2}
+    trait: {fileID: 0}
+  - displayName: HOT STREAK
+    line: ACT 3 ENEMIES HAVE HOT HAND
+    rule: 7
+    amount: 3
+    face: {fileID: 0}
+    trait: {fileID: 11400000, guid: 98e32f2de1581a2409e788d30de41077, type: 2}
+  - displayName: LAST CALL
+    line: BOSSES ONLY HEAL YOU HALFWAY
+    rule: 8
+    amount: 50
+    face: {fileID: 0}
+    trait: {fileID: 0}

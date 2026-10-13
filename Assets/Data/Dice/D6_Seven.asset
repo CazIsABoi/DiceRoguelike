@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a129d87d9d976a4996a84f43e301b3c, type: 3}
+  m_Name: D6_Seven
+  m_EditorClassIdentifier: Assembly-CSharp::DieDefinition
+  displayName: D6 Seven
+  faceDefinitions:
+  - {fileID: 11400000, guid: c019a029488eaa64a90ae0f0ba0f2842, type: 2}
+  - {fileID: 11400000, guid: c019a029488eaa64a90ae0f0ba0f2842, type: 2}
+  - {fileID: 11400000, guid: c019a029488eaa64a90ae0f0ba0f2842, type: 2}
+  - {fileID: 11400000, guid: c019a029488eaa64a90ae0f0ba0f2842, type: 2}
+  - {fileID: 11400000, guid: c019a029488eaa64a90ae0f0ba0f2842, type: 2}
+  - {fileID: 11400000, guid: c019a029488eaa64a90ae0f0ba0f2842, type: 2}
+  role: 1
+  line: A 1 OR 9
+  prefab: {fileID: 0}
+  icon: {fileID: 21300000, guid: 433ddd394a772954a92142d34499fc24, type: 3}

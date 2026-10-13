@@ -30,7 +30,7 @@ public static class Telemetry
     [Serializable]
     private class RunRow
     {
-        public string runId, playerId, session, version, platform;
+        public string runId, playerId, session, version, runSettings, platform;
         public int runNumber;                  // 1 = this player's first run ever
         public string result = "abandoned";    // won, lost, abandoned
         public int fightsReached, fightsWon;
@@ -176,6 +176,7 @@ public static class Telemetry
             playerId = PlayerId(),
             session = session,
             version = Application.version,
+            runSettings = RunSettings.Label,
             platform = Application.platform.ToString(),
             runNumber = number,
             startedLocal = DateTime.Now.ToString("yyyy-MM-dd HH:mm")

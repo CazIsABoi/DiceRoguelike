@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using static UnityEngine.Rendering.RayTracingAccelerationStructure;
 
 public class EnemyController : DiceSide
 {
@@ -10,7 +11,9 @@ public class EnemyController : DiceSide
     [SerializeField] private float sidewaysForce = 10f;
     [SerializeField] private float spinForce = 10f;
     private EnemyBrain brain => enemy.brain;
-    private int throwAttempts => enemy.throwAttempts;
+    private int throwAttempts => enemy.throwAttempts + ExtraThrows;
+    public int ExtraThrows { get; set; }          // Raise: GameController can give bosses more throws
+    public float HpMultiplier { get; set; } = 1f; // Raise (Pit Watch): bosses get more HP
     private List<Die> landedDice = new List<Die>();
     public string DisplayName => enemy.displayName;
     private Coroutine throwRoutine;
@@ -42,7 +45,7 @@ public class EnemyController : DiceSide
         DestroyDice();
         landedDice.Clear();
         enemy = def;
-        InitHealth(enemy.maxHP);
+        InitHealth(Mathf.Max(1, Mathf.RoundToInt(enemy.maxHP * RunSettings.EnemyHpMultiplier * HpMultiplier)));
         SpawnDice(enemy.dice);
         SpawnSlots(new List<FaceType>(enemy.layout.pattern));
         ClearTotal();

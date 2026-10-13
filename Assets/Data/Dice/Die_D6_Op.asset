@@ -20,5 +20,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 44d9d6945a9c40d4d9dc3a037a64521e, type: 2}
   - {fileID: 11400000, guid: 83c643d52ed689b46a4b9ab4770eea56, type: 2}
   - {fileID: 11400000, guid: ab15ac082cd6fbc40bd4baf7c7712ec7, type: 2}
+  role: 2
+  line: 
   prefab: {fileID: 0}
   icon: {fileID: 21300000, guid: 433ddd394a772954a92142d34499fc24, type: 3}
