@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Knuckles
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Knuckles
-  maxHP: 64
+  maxHP: 57
   dice:
   - {fileID: 11400000, guid: 1dff52690b458ad4f8f484c5287427be, type: 2}
   - {fileID: 11400000, guid: b4b43e029f03c974e82994d370f8daa8, type: 2}

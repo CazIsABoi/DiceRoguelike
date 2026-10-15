@@ -456,6 +456,8 @@ MonoBehaviour:
   shakeFullSpeed: 6
   shakeIdleVolume: 0.15
   shakeFade: 10
+  hopLift: 3
+  hopHangTime: 0.5
   dustMinSpeed: 3
 --- !u!114 &4062360055529501214
 MonoBehaviour:

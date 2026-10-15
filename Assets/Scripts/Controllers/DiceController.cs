@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -99,6 +100,12 @@ public class DiceController : MonoBehaviour
     public DieState State { get; private set; } = DieState.Hovering;
     private DieState stateBeforeGrab;   // so it can go back to hovering or whatever after a grab
     public int ThrowsLeft => ThrowAttempts;
+
+    // Fair dice (FairDice.cs): this die's streaks, kept between rounds
+    private int xMisses;                                    // throws in a row without a × (only counted on a die that has one)
+    private bool lastWasLow;                                // the last throw landed on a 1 or 2 (FairDice.LowMax)
+    [SerializeField] private float hopLift = 0.35f;         // a throw the fair dice rules don't allow hops this high onto an allowed side
+    [SerializeField] private float hopHangTime = 0.3f;   // how long the fair dice hop hangs in the air (the click throw uses Slam Hang Time)
     public event System.Action<DiceController> OnChanged;
     [SerializeField] private float dustMinSpeed = 3f;   // softer landings don't puff
 
@@ -276,7 +283,7 @@ public class DiceController : MonoBehaviour
 
     private void Grab(InputAction.CallbackContext context)
     {
-        if (SettingsMenu.IsOpen || ChipTray.Targeting) return;   // a chip is waiting for an enemy die: clicks are for that
+        if (SettingsMenu.IsOpen || ChipTray.Targeting || TipController.Active) return;   // a chip or a tip is using the clicks
         if (puttingBack || owner.InputBlocked || !IsMouseOverMe()) return;
 
         // Waiting on the Rabbit's Foot, but another die used it first
@@ -350,61 +357,11 @@ public class DiceController : MonoBehaviour
         rb.isKinematic = true;            // no physics: we move it by hand, like the enemy's "hand"
         PlaySound(owner.DiceGrabClip, 0.5f);
 
-        Transform t = transform;
-        int faceIndex = Random.Range(0, die.GetCurrentFaces().Length);
-        Transform socket = die.GetSocket(faceIndex);
-        Quaternion faceUp = Quaternion.FromToRotation(socket.up, Vector3.up) * t.rotation;
-        Quaternion endRot = Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up) * faceUp;
-
-        // Where it lands: its own spot (the spawn point plus this die's offset), so your dice never land on each other
+        // Where it lands: its own spot (the spawn point plus this die's offset), so your dice never land on each other.
+        // Which side: PickFace, every side equally likely unless a fair dice rule says otherwise
         Vector2 jitter = Random.insideUnitCircle * slamJitter;
-        Vector3 spot = SpawnPosition + new Vector3(jitter.x, 0f, jitter.y);
-        spot.y = groundCollider.Raycast(new Ray(spot + Vector3.up * 3f, Vector3.down), out RaycastHit hit, 10f)
-               ? hit.point.y : groundY;
-        float half = Vector3.Distance(socket.position, t.position);
-        Vector3 restPos = spot + Vector3.up * half;
-        Vector3 highPos = restPos + Vector3.up * slamLift;
-        Vector3 spinAxis = Random.onUnitSphere;
-
-        // a. Lift: fast, then slow, spinning
-        Vector3 from = t.position;
-        for (float time = 0f; time < slamLiftTime; time += Time.deltaTime)
-        {
-            float k = time / slamLiftTime;
-            k = 1f - (1f - k) * (1f - k);
-            t.position = Vector3.Lerp(from, highPos, k);
-            t.Rotate(spinAxis, slamSpin * Time.deltaTime, Space.World);
-            yield return null;
-        }
-
-        // b. Hang, still spinning
-        for (float time = 0f; time < slamHangTime; time += Time.deltaTime)
-        {
-            t.position = highPos;
-            t.Rotate(spinAxis, slamSpin * Time.deltaTime, Space.World);
-            yield return null;
-        }
-
-        // c. Drop: slow, then fast, turning into the chosen face
-        Quaternion spun = t.rotation;
-        for (float time = 0f; time < slamDropTime; time += Time.deltaTime)
-        {
-            float k = time / slamDropTime;
-            k = k * k;
-            t.SetPositionAndRotation(Vector3.Lerp(highPos, restPos, k), Quaternion.Slerp(spun, endRot, k));
-            yield return null;
-        }
-        t.SetPositionAndRotation(restPos, endRot);
-
-        // d. Impact: dust, a clack, a little squash
-        if (owner.LandDust != null)
-        {
-            owner.LandDust.transform.position = spot;
-            owner.LandDust.Emit(14);
-        }
-        AudioClip[] clips = owner.DiceHitClips;
-        if (clips != null && clips.Length > 0) PlaySound(clips[Random.Range(0, clips.Length)], 1f);
-        StartCoroutine(GameController.Pop(t, baseScale, 1.15f, 0.2f));
+        yield return SlamTo(PickFace(), SpawnPosition + new Vector3(jitter.x, 0f, jitter.y), slamLift);
+        RecordLanding();
 
         // e. Landed: the same ending as WaitForSettle
         SetRolling(false);
@@ -437,6 +394,103 @@ public class DiceController : MonoBehaviour
 
         if (transform.position.y < groundY - fallDepth) FellOff();
     }
+    // Lifts, spins, and slams down on spot with side faceIndex up. Used by the click throw and the fair dice hop.
+    private IEnumerator SlamTo(int faceIndex, Vector3 spot, float lift, float hang = -1f)
+    {
+        float hangTime = hang >= 0f ? hang : slamHangTime;
+        Transform t = transform;
+        Transform socket = die.GetSocket(faceIndex);
+        Quaternion faceUp = Quaternion.FromToRotation(socket.up, Vector3.up) * t.rotation;
+        Quaternion endRot = Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up) * faceUp;
+
+        spot.y = groundCollider.Raycast(new Ray(spot + Vector3.up * 3f, Vector3.down), out RaycastHit hit, 10f)
+               ? hit.point.y : groundY;
+        float half = Vector3.Distance(socket.position, t.position);
+        Vector3 restPos = spot + Vector3.up * half;
+        Vector3 highPos = restPos + Vector3.up * lift;
+        Vector3 spinAxis = Random.onUnitSphere;
+
+        // a. Lift: fast, then slow, spinning
+        Vector3 from = t.position;
+        for (float time = 0f; time < slamLiftTime; time += Time.deltaTime)
+        {
+            float k = time / slamLiftTime;
+            k = 1f - (1f - k) * (1f - k);
+            t.position = Vector3.Lerp(from, highPos, k);
+            t.Rotate(spinAxis, slamSpin * Time.deltaTime, Space.World);
+            yield return null;
+        }
+
+        // b. Hang, still spinning
+        for (float time = 0f; time < hangTime; time += Time.deltaTime)
+        {
+            t.position = highPos;
+            t.Rotate(spinAxis, slamSpin * Time.deltaTime, Space.World);
+            yield return null;
+        }
+
+        // c. Drop: slow, then fast, turning into the chosen face
+        Quaternion spun = t.rotation;
+        for (float time = 0f; time < slamDropTime; time += Time.deltaTime)
+        {
+            float k = time / slamDropTime;
+            k = k * k;
+            t.SetPositionAndRotation(Vector3.Lerp(highPos, restPos, k), Quaternion.Slerp(spun, endRot, k));
+            yield return null;
+        }
+        t.SetPositionAndRotation(restPos, endRot);
+
+        // d. Impact: dust, a clack, a little squash
+        if (owner.LandDust != null)
+        {
+            owner.LandDust.transform.position = spot;
+            owner.LandDust.Emit(14);
+        }
+        AudioClip[] clips = owner.DiceHitClips;
+        if (clips != null && clips.Length > 0) PlaySound(clips[Random.Range(0, clips.Length)], 1f);
+        StartCoroutine(GameController.Pop(t, baseScale, 1.15f, 0.2f));
+    }
+
+    // ---------- Fair dice ----------
+
+    private bool FairOn => playerControlled && owner != null && FairDice.AppliesAt(owner.Table);
+
+    private bool HasMultiply
+    {
+        get
+        {
+            foreach (FaceDefinition f in die.GetCurrentFaces()) if (FairDice.IsMultiply(f)) return true;
+            return false;
+        }
+    }
+
+    // Can the next throw land on this face?
+    private bool Allowed(FaceDefinition face)
+    {
+        if (!FairOn) return true;
+        if (FairDice.XMissLimit > 0 && xMisses >= FairDice.XMissLimit && HasMultiply) return FairDice.IsMultiply(face);
+        if (lastWasLow && FairDice.IsLow(face)) return false;
+        return true;
+    }
+
+    // A side for the next throw: every allowed side equally likely (every side, if the rules allow none)
+    private int PickFace()
+    {
+        FaceDefinition[] faces = die.GetCurrentFaces();
+        List<int> allowed = new List<int>();
+        for (int i = 0; i < faces.Length; i++) if (Allowed(faces[i])) allowed.Add(i);
+        return allowed.Count > 0 ? allowed[Random.Range(0, allowed.Count)] : Random.Range(0, faces.Length);
+    }
+
+    // After every throw lands: update the streaks
+    private void RecordLanding()
+    {
+        if (!FairOn) return;
+        FaceDefinition top = die.GetTopFace();
+        if (HasMultiply) xMisses = FairDice.IsMultiply(top) ? 0 : xMisses + 1;
+        lastWasLow = FairDice.IsLow(top);
+    }
+
     private void FellOff()
     {
         if (!playerControlled || State != DieState.Rolling)
@@ -607,6 +661,16 @@ public class DiceController : MonoBehaviour
         }
         StopSettleAssist();
         SetInterpolation(false);
+
+        // Fair dice: landed on a side the rules don't allow (a 1 or 2 twice in a row, a × streak): it hops onto one
+        // they do. Doesn't cost a throw.
+        if (FairOn && !Allowed(die.GetTopFace()))
+        {
+            rb.isKinematic = true;
+            Vector3 here = transform.position;
+            yield return SlamTo(PickFace(), new Vector3(here.x, groundY, here.z), hopLift, hopHangTime);
+        }
+        RecordLanding();
         SetRolling(false);
 
         hasLanded = true;
@@ -873,7 +937,7 @@ public class DiceController : MonoBehaviour
 
     private void MoveDiceToSlot(InputAction.CallbackContext context)
     {
-        if (SettingsMenu.IsOpen || ChipTray.Targeting) return;   // a chip is waiting for an enemy die: clicks are for that
+        if (SettingsMenu.IsOpen || ChipTray.Targeting || TipController.Active) return;   // a chip or a tip is using the clicks
         if (!IsMouseOverMe()) return;
         if (isDragging || puttingBack || respawning != null) return;   // it's in your hand (or on its way back): drop it first
         if (State == DieState.Hovering)
@@ -1037,6 +1101,21 @@ public class DiceController : MonoBehaviour
         OnChanged?.Invoke(this);
     }
 
+    // ------------------- Tip -------------------
+
+    // A tip can turn this die: it's yours, it has landed, and nothing else is moving it
+    public bool CanTip => playerControlled && State == DieState.Resting && !isDragging && !puttingBack
+                          && respawning == null && wobbleRoutine == null;
+
+    // TipController has turned the die onto its new side: it goes straight into a slot (a tip locks it in)
+    public void LockInByTip()
+    {
+        ToggleInputs(false);
+        rb.isKinematic = true;
+        LockIn();
+        Tutorial.Done("lock");
+    }
+
     // Puts the die in a slot, or busts it if no slot takes its face
     private void LockIn()
     {
@@ -1044,4 +1123,4 @@ public class DiceController : MonoBehaviour
         owner.MoveDiceToSlot(die);
         SetState(fits ? DieState.Locked : DieState.Busted);
     }
-}
+}

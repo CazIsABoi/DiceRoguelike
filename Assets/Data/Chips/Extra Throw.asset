@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChipDefinition
   type: 3
   displayName: EXTRA THROW
-  line: ALL YOUR DICE GET ONE MORE THROW
+  line: ALL DICE GET ONE MORE THROW
   icon: {fileID: 21300000, guid: 1294a887bb9130240bb93f25ae4fbc4b, type: 3}
   color: {r: 1, g: 0, b: 0, a: 1}
   symbol: 

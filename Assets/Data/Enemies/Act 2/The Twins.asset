@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: The Twins
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: The Twins
-  maxHP: 740
+  maxHP: 850
   dice:
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}

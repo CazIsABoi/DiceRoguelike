@@ -39,6 +39,11 @@ public class PlayerController : DiceSide
     public bool InsuranceUsed { get; private set; }
     private int bonusRethrows;                              // Rabbit's Foot: refilled at the start of every fight
 
+    [Header("Tip")]
+    [SerializeField, Min(0)] private int tipsPerFight = 1;  // tips you get every fight (TipController). 0 turns tipping off
+    public int TipsLeft { get; private set; }
+    public int TipsPerFight => tipsPerFight;
+
 
     // The spares are spawned once and parked (inactive) when they're not in play.
     // While one is in, the die it replaced is parked instead, faces and all.
@@ -265,8 +270,19 @@ public class PlayerController : DiceSide
     public void OnFightStart()
     {
         bonusRethrows = HasRelic(RelicType.RabbitsFoot) ? 1 : 0;
+        TipsLeft = tipsPerFight;
         OnRelicsChanged?.Invoke();
     }
+
+    // Tip: once a fight (Tips Per Fight), a die you've thrown can be turned onto a neighbouring side. It locks in.
+    public void SpendTip()
+    {
+        if (TipsLeft > 0) TipsLeft--;
+        OnRelicsChanged?.Invoke();
+    }
+
+    // Fold: only before your first throw of the round, so all you've seen is the enemy's number
+    public bool CanFold => NoDiceThrownYet && DiceDone == 0;
 
     // Rabbit's Foot: once a fight, a die that's out of throws can be thrown again
     public bool RabbitsFootReady => bonusRethrows > 0;
@@ -434,4 +450,4 @@ public class PlayerController : DiceSide
                 if (f != null && f.type == FaceType.Operator && f.op == Operator.Multiply) return true;
         return false;
     }
-}
+}

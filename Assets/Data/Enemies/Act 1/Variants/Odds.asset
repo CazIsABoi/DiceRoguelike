@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
   m_Name: Odds
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  displayName: ODDS
-  maxHP: 9
+  displayName: Odds
+  maxHP: 11
   dice:
   - {fileID: 11400000, guid: c0b7c8eb07e44ff46aca0d944a0896a9, type: 2}
   - {fileID: 11400000, guid: c0b7c8eb07e44ff46aca0d944a0896a9, type: 2}

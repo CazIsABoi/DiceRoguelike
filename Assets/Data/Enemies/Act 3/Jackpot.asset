@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Jackpot
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Jackpot
-  maxHP: 1200
+  maxHP: 13000
   dice:
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}

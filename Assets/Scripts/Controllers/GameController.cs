@@ -112,6 +112,32 @@ public class GameController : MonoBehaviour
     private bool doubleDownArmed;
     private int doubleDownFight;                              // the fight Double Down was used in (0 = not yet)
 
+    [Header("Fold")]
+    [SerializeField, Range(0, 100)] private int foldPercent = 20;   // folding costs this % of your max HP instead of the round's damage. 0 turns Fold off
+    [SerializeField] private Key foldKey = Key.F;
+    [SerializeField] private TMP_Text foldText;                // optional: "F · FOLD −20" while you can fold (a monitor button can call TryFold too)
+    private bool playerTurn;                                   // your dice are live this round
+    public int FoldCost => Mathf.Max(1, player.MaxHealth * foldPercent / 100);
+
+    [Header("Comps")]
+    [SerializeField, Min(0)] private int compsEvery = 3;       // every this many lost rounds (folds count) the house hands you a chip. 0 turns Comps off
+    [SerializeField] private ChipTray chipTray;
+    [SerializeField] private ChipDefinition[] compChips;       // the chips a comp can be (the same ones as the reward screen's Chip Pool)
+    [SerializeField] private TMP_Text compText;                // optional: the meter, "COMP ●●○"
+    private int compLosses;                                    // lost rounds since the last comp. Kept between fights
+
+    [Header("Fair Dice")]   // your dice only, High tables only (FairDice.cs)
+    [SerializeField, Min(0)] private int xMissLimit = 8;       // a die with a × that missed it this many throws in a row lands on × next. 0 = off. The sim: 2 is far too strong, 8 is mild
+    [SerializeField, Range(0, 9)] private int lowRepeatMax = 2;   // a number die that landed on this or lower can't do it again next throw. 0 = off
+
+    [Header("Table Limit")]
+    [SerializeField, Range(0, 100)] private int damageCapPercent = 50;   // no round can take more than this % of YOUR max HP. 0 = off. Enemies have no limit
+
+    [Header("Knockout")]
+    [SerializeField] private bool knockoutReward = true;       // beat an enemy in the first round: a free chip (from Comp Chips)
+    [SerializeField, Range(0, 100)] private int knockoutHealPercent = 10;   // ...or this much of your max HP if both chip slots are full
+    private int roundsThisFight;
+
     [Header("End Screen")]
     [SerializeField] private GameObject endPanel;
     [SerializeField] private TMP_Text endTitle;   // "THANKS FOR PLAYING" / "GAME OVER"
@@ -169,6 +195,8 @@ public class GameController : MonoBehaviour
     {
         ladder = RollLadder();   // in Awake, so the ladder board sees this run's enemies when it builds itself
         if (counter == null) counter = FindAnyObjectByType<CountShow>();
+        FairDice.XMissLimit = xMissLimit;
+        FairDice.LowMax = lowRepeatMax;
         SchoolOrder = schoolOrder && !RunSettings.LeftToRight;
     }
     private void Start()
@@ -184,6 +212,9 @@ public class GameController : MonoBehaviour
         player.OnRelicsChanged += UpdateRelicBar;
         player.OnRelicTriggered += PulseRelic;
         UpdateRelicBar();
+        UpdateCompText();
+        if (compsEvery > 0 && (chipTray == null || compChips == null || compChips.Length == 0))
+            Debug.LogWarning("[GameController] Comps are on, but Chip Tray or Comp Chips is empty, so no comp can be handed out.");
         Telemetry.StartRun();
         StartCoroutine(BeginFight());
     }
@@ -191,6 +222,110 @@ public class GameController : MonoBehaviour
     private void Update()
     {
         if (Keyboard.current != null && Keyboard.current.dKey.wasPressedThisFrame) TryDoubleDown();
+        if (Keyboard.current != null && Keyboard.current[foldKey].wasPressedThisFrame) TryFold();
+        if (foldText != null)
+        {
+            bool show = foldPercent > 0 && playerTurn && !roundEnding && !player.InputBlocked && player.CanFold;
+            if (foldText.gameObject.activeSelf != show) foldText.gameObject.SetActive(show);
+            if (show) foldText.text = $"{foldKey.ToString().ToUpper()} · FOLD −{FoldCost}";
+        }
+    }
+
+    // ---------- Fold ----------
+
+    // Fold: after seeing the enemy's number, before your first throw, give the round up for a fixed price (Fold Percent
+    // of your max HP) instead of whatever the difference would be. Nobody else takes damage. Also callable from a
+    // monitor button.
+    public void TryFold()
+    {
+        if (foldPercent <= 0 || SettingsMenu.IsOpen || ChipTray.Targeting || TipController.Active) return;
+        if (!playerTurn || roundEnding || player.InputBlocked) return;
+        if (!player.CanFold) { Tutorial.Notice("FOLD BEFORE YOUR FIRST THROW"); return; }
+        if (FoldCost >= player.Health) { Tutorial.Notice("FOLDING WOULD KNOCK YOU OUT"); return; }
+        StartCoroutine(FoldRoutine());
+    }
+
+    private IEnumerator FoldRoutine()
+    {
+        roundEnding = true;
+        playerTurn = false;
+        player.InputBlocked = true;
+        cameraController.SetLook(false);
+        int cost = FoldCost;
+        Tutorial.Done("fold");
+        Telemetry.Choice("fold", new[] { "fold" }, "fold", $"cost {cost}, enemy {enemyResult}");
+        if (doubleDownArmed) doubleDownArmed = false;   // Double Down is spent on a folded round
+
+        strip.Flash($"FOLD · −{cost}", loseColor, timeBetweenRounds);
+        score = -cost;
+        yield return Drain(-cost, () => player.TakeDamage(cost));
+
+        if (Traits != null) foreach (EnemyTrait t in Traits) if (t != null) t.OnRoundEnd(enemy, true);
+        yield return CountComp();
+
+        enemy.ClearTotal();
+        player.ClearTotal();
+        player.ResetRound();
+        enemy.ResetRound();
+        playerResult = null;
+        enemyResult = null;
+        roundEnding = false;
+        yield return RoundRoutine();
+    }
+
+    // ---------- Comps ----------
+
+    // A lost round (or a fold) fills the comp meter. Full meter: a free chip, if you have room for one.
+    // No room: the meter stays full and pays out after the next loss with room.
+    private IEnumerator CountComp()
+    {
+        if (compsEvery <= 0 || compChips == null || compChips.Length == 0 || chipTray == null) yield break;
+        compLosses = Mathf.Min(compLosses + 1, compsEvery);
+        UpdateCompText();
+        if (compLosses < compsEvery || !chipTray.HasRoom) yield break;
+
+        ChipDefinition chip = compChips[Random.Range(0, compChips.Length)];
+        if (!chipTray.Add(chip)) yield break;
+        compLosses = 0;
+        UpdateCompText();
+        Telemetry.Choice("comp", new[] { chip.displayName }, chip.displayName, "");
+        strip.FlashScrolling($"ON THE HOUSE · {chip.displayName.ToUpper()} CHIP · HOLD S TO SEE YOUR CHIPS", Color.yellow, 2.5f);
+        yield return new WaitForSeconds(2f);
+    }
+
+    // Knockout: an enemy beaten in the first round. A free chip, or a small heal if both chip slots are full
+    private IEnumerator KnockoutReward()
+    {
+        Telemetry.Choice("knockout", new[] { "knockout" }, "knockout", "");
+        if (chipTray != null && chipTray.HasRoom && compChips != null && compChips.Length > 0)
+        {
+            ChipDefinition chip = compChips[Random.Range(0, compChips.Length)];
+            if (chipTray.Add(chip))
+            {
+                strip.FlashScrolling($"KNOCKOUT · FIRST ROUND · {chip.displayName.ToUpper()} CHIP", Color.yellow, 2.5f);
+                yield return new WaitForSeconds(2.5f);
+                yield break;
+            }
+        }
+        int heal = Mathf.Max(1, player.MaxHealth * knockoutHealPercent / 100);
+        if (knockoutHealPercent <= 0 || player.Health >= player.MaxHealth)
+        {
+            strip.Flash("KNOCKOUT · FIRST ROUND", Color.yellow, 2f);
+            yield return new WaitForSeconds(2f);
+            yield break;
+        }
+        player.Heal(heal);
+        strip.Flash($"KNOCKOUT · FIRST ROUND · +{heal} HP", Color.yellow, 2.5f);
+        yield return new WaitForSeconds(2.5f);
+    }
+
+    private void UpdateCompText()
+    {
+        if (compText == null) return;
+        if (compsEvery <= 0) { compText.text = ""; return; }
+        StringBuilder pips = new StringBuilder("COMP ");
+        for (int i = 0; i < compsEvery; i++) pips.Append(i < compLosses ? "●" : "○");
+        compText.text = pips.ToString();
     }
 
     // Double Down: once a fight, before your first throw of a round. That round's damage counts twice, either way.
@@ -253,6 +388,7 @@ public class GameController : MonoBehaviour
         if (Traits != null) foreach (EnemyTrait t in Traits) if (t != null) t.OnFightStart(enemy);
         player.ClearTotal();
         player.OnFightStart();
+        roundsThisFight = 0;
         enemy.SayIntro();
         strip.Flash($"VS {enemy.DisplayName}", Color.red, 3f);
         yield return new WaitForSeconds(introTime);
@@ -297,6 +433,7 @@ public class GameController : MonoBehaviour
 
     private IEnumerator RoundRoutine()
     {
+        roundsThisFight++;
         scoreText.text = "";
         if (Table == TableType.Target || Table == TableType.Limit)
         {
@@ -320,15 +457,21 @@ public class GameController : MonoBehaviour
         yield return rig.MoveTo(tableView);         
         cameraController.SetLook(true);
         player.InputBlocked = false;
+        playerTurn = true;
         if (Fight == 1) Tutorial.Hint("throw", ThrowStyle.ThrowHint);
         else if (player.HasRelic(RelicType.DoubleDown) && doubleDownFight != Fight)
             Tutorial.Hint("doubledown", "DOUBLE DOWN: PRESS D BEFORE YOU THROW");
+        else if (Fight == 2 && foldPercent > 0)
+            Tutorial.Hint("fold", $"CAN'T BEAT THAT? PRESS {foldKey.ToString().ToUpper()} TO FOLD FOR {FoldCost} HP · BEFORE YOU THROW");
+        else if (Fight == 3 && player.TipsPerFight > 0)
+            Tutorial.Hint("tip", "POINT AT A DIE THAT LANDED AND PRESS T TO TIP IT · ONCE A FIGHT");
         yield break;
     }
 
     private IEnumerator EndRoundRoutine()
     {
         roundEnding = true;
+        playerTurn = false;
         player.InputBlocked = true;   // until the next round starts: no grabbing dice during the reward or relic screens
 
         // The table turns both results into scores (bigger is better), the difference is the damage
@@ -404,6 +547,21 @@ public class GameController : MonoBehaviour
             yield return new WaitForSeconds(1.5f);
         }
 
+        // The table limit: no round takes more than Damage Cap Percent of your max HP. A huge loss still hurts, but one
+        // roll can't end a run from full health. Enemies have no limit, so a monster roll of yours still lands in full.
+        if (diff < 0 && damageCapPercent > 0)
+        {
+            int cap = Mathf.Max(1, player.MaxHealth * damageCapPercent / 100);
+            if (-diff > cap)
+            {
+                diff = -cap;
+                score = diff;
+                Telemetry.Choice("tablelimit", new[] { "cap" }, "cap", $"capped at {cap}");
+                strip.Flash($"TABLE LIMIT · YOU LOSE {cap}", Color.yellow, 1.5f);
+                yield return new WaitForSeconds(1.5f);
+            }
+        }
+
         bool insured = false;
         yield return Drain(diff, () =>
         {
@@ -445,6 +603,8 @@ public class GameController : MonoBehaviour
             yield break;
         }
 
+        if (diff < 0 && !enemy.IsDead) yield return CountComp();   // a lost round fills the comp meter
+
         if (enemy.IsDead)
         {
             Telemetry.EndFight(true);
@@ -456,6 +616,8 @@ public class GameController : MonoBehaviour
                 yield return EndRun(true);
                 yield break;
             }
+
+            if (knockoutReward && roundsThisFight == 1) yield return KnockoutReward();
 
             EnemyDefinition beaten = ladder[Fight - 1];
             facePool.AddRange(beaten.unlockFaces);

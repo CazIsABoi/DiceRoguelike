@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Lucky Lou
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Lucky Lou
-  maxHP: 23
+  maxHP: 25
   dice:
   - {fileID: 11400000, guid: a39690b01d3a67e4dacc6c15c5e7c5dd, type: 2}
   - {fileID: 11400000, guid: 482aa2a32b0f9284c8b4b3b4f70bf6c5, type: 2}

@@ -563,6 +563,18 @@ public abstract class DiceSide : MonoBehaviour
         if (equationPunchRoutine != null) StopCoroutine(equationPunchRoutine);
         equationPunchRoutine = StartCoroutine(GameController.Pop(equationText.transform, Vector3.one, scale, duration));
     }
+    // Tip: would this face find a slot right now? (The same test as HasSlotFor, for a face the die isn't showing yet)
+    public bool HasSlotForFace(FaceDefinition face)
+    {
+        if (face == null) return false;
+        foreach (DiceSlot slot in diceSlots)
+            if (slot.IsEmpty && slot.AcceptableFace == face.type) return true;
+        return false;
+    }
+
+    // Fold: dice already in a slot or busted this round
+    public int DiceDone => diceInSlots + bustedDice.Count;
+
     public bool CouldFitLater(Die die)
     {
         foreach (FaceDefinition face in die.GetCurrentFaces())
@@ -813,4 +825,4 @@ public abstract class DiceSide : MonoBehaviour
         OnHealthChanged?.Invoke(Health, maxHealth);
     }
     #endregion
-}
+}

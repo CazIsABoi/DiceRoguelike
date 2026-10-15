@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Sticky FIngers
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Sticky Fingers
-  maxHP: 550
+  maxHP: 1400
   dice:
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}
   - {fileID: 11400000, guid: 9a532dde7f1728c4480fca55a3ca1f5a, type: 2}

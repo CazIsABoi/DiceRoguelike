@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
   m_Name: Remy
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  displayName: REMY
-  maxHP: 11
+  displayName: Remy
+  maxHP: 12
   dice:
   - {fileID: 11400000, guid: 880b388722bd6b4468a290711d81d8a2, type: 2}
   - {fileID: 11400000, guid: 880b388722bd6b4468a290711d81d8a2, type: 2}

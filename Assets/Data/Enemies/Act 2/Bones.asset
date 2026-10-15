@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Bones
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Bones
-  maxHP: 83
+  maxHP: 91
   dice:
   - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}
   - {fileID: 11400000, guid: 31dbd566a5f84694fad8de4270e3b5f4, type: 2}

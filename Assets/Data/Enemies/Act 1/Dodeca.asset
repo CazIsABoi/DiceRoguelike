@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Dodeca
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Dodeca
-  maxHP: 10
+  maxHP: 12
   dice:
   - {fileID: 11400000, guid: 880b388722bd6b4468a290711d81d8a2, type: 2}
   - {fileID: 11400000, guid: 482aa2a32b0f9284c8b4b3b4f70bf6c5, type: 2}

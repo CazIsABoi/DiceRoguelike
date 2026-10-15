@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Snake Eyes
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Snake Eyes
-  maxHP: 5500
+  maxHP: 9800
   dice:
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
   - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Pit Boss
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Pit Boss
-  maxHP: 16
+  maxHP: 20
   dice:
   - {fileID: 11400000, guid: 5cf60d61697167a4a8fd0a1a7a02c6d5, type: 2}
   - {fileID: 11400000, guid: 2271aa48cda331c469745cea8ce0313f, type: 2}

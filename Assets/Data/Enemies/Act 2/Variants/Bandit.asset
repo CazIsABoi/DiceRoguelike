@@ -10,43 +10,43 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
-  m_Name: Enemy_Noir
+  m_Name: Bandit
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  displayName: NOIR
-  maxHP: 2700
+  displayName: Bandit
+  maxHP: 780
   dice:
-  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
-  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
-  - {fileID: 11400000, guid: a23343978be9d4148933813c808d71bf, type: 2}
-  - {fileID: 11400000, guid: abc53b7dd462d7044b9d089100d06ab7, type: 2}
-  layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
-  brain: 2
+  - {fileID: 11400000, guid: 17317ea5156942d4c8d558945b3ca514, type: 2}
+  - {fileID: 11400000, guid: 17317ea5156942d4c8d558945b3ca514, type: 2}
+  - {fileID: 11400000, guid: 17317ea5156942d4c8d558945b3ca514, type: 2}
+  layout: {fileID: 11400000, guid: 6312ee136d7587b4787f7488957bea26, type: 2}
+  brain: 0
   traits: []
-  throwAttempts: 2
+  throwAttempts: 1
   blunderChance: 0
   rethrowBelow: 2
-  minGain: 200
+  minGain: 0
   voice: {fileID: 8300000, guid: 665134c8c79dc034a92083ea43a4dfa2, type: 3}
   table: 0
   targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
-  intro: My sister bets on red. I bet on you losing.
+  intro: Pull the lever, kid. Let's see some sevens.
   rerollLines:
-  - No.
-  - Not tonight.
+  - Spin!
+  - Again!
+  - Pull!
   keepLines:
-  - Black. Always black.
-  - Quietly done.
+  - Jackpot!
+  - Cherries.
   winLines:
-  - Noir wins.
-  - Lights out.
+  - Seven seven seven!
+  - Pay up.
   loseLines:
-  - Hm. Red's luck.
-  - A shadow passes.
+  - Tilt!
+  - Out of order.
   bustLines:
-  - Smudged.
-  defeatLine: Fade to black.
+  - Jammed.
+  defeatLine: ...insert coin.
   unlockFaces:
   - {fileID: 11400000, guid: ab304ee57c3df5544b6a152fb5baf412, type: 2}
   dieDrop: {fileID: 0}

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Double Dee
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: Double Dee
-  maxHP: 9
+  maxHP: 10
   dice:
   - {fileID: 11400000, guid: 77b1f8d31ae12b14f8b4781549e1c87a, type: 2}
   - {fileID: 11400000, guid: 77b1f8d31ae12b14f8b4781549e1c87a, type: 2}

@@ -10,44 +10,45 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 12eb207080f623347b88dc61a8e03c23, type: 3}
-  m_Name: Enemy_Sommelier
+  m_Name: Ghost
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  displayName: SOMMELIER
-  maxHP: 360
+  displayName: Ghost
+  maxHP: 41
   dice:
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
-  - {fileID: 11400000, guid: 0789abca08665014d9a0546dd4ca24bf, type: 2}
-  layout: {fileID: 11400000, guid: ca4984169099a1e47b803bc2c250fc4c, type: 2}
-  brain: 2
+  - {fileID: 11400000, guid: 7e2c1ff8da48a2c43adf05e8037be44c, type: 2}
+  - {fileID: 11400000, guid: 7e2c1ff8da48a2c43adf05e8037be44c, type: 2}
+  layout: {fileID: 11400000, guid: 60f4b74db3701d64d85663626e3c5bb1, type: 2}
+  brain: 0
   traits: []
-  throwAttempts: 3
+  throwAttempts: 1
   blunderChance: 0
   rethrowBelow: 2
-  minGain: 50
+  minGain: 0
   voice: {fileID: 8300000, guid: 72ed3bf90db45cf4cb10de50cc81bacd, type: 3}
-  table: 3
-  targetRange: {x: 200, y: 600}
+  table: 1
+  targetRange: {x: 10, y: 40}
   portrait: {fileID: 0}
   portraitTalk: {fileID: 0}
-  intro: A fine vintage needs a limit. Just enough. Never too much.
+  intro: Boo. Or nothing. Whichever is lower.
   rerollLines:
-  - Corked.
-  - Not this one.
-  - Pour another.
+  - Fading...
+  - Again.
+  - Boo.
   keepLines:
-  - Exquisite.
-  - Just under.
+  - Barely there.
+  - Faint.
   winLines:
-  - A perfect pour.
-  - Notes of victory.
+  - Can't beat what isn't there.
+  - Boo.
   loseLines:
-  - Overpoured.
-  - Vinegar.
+  - I'm... fading.
+  - You see right through me.
   bustLines:
-  - Spilled.
-  defeatLine: The bottle's empty.
+  - Spooked myself.
+  defeatLine: Passing on.
   unlockFaces:
-  - {fileID: 11400000, guid: c019a029488eaa64a90ae0f0ba0f2842, type: 2}
+  - {fileID: 11400000, guid: 252adc53d36cc0e4c99ce3812a094820, type: 2}
   dieDrop: {fileID: 0}

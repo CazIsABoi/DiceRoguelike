@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: The Bartender
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   displayName: The Bartender
-  maxHP: 390
+  maxHP: 540
   dice:
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
   - {fileID: 11400000, guid: a11954aeaa5159d4fb7817de67209e58, type: 2}
