@@ -25,7 +25,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c1f9d348021ef3f48b37728664273ef4, type: 2}
   - {fileID: 11400000, guid: c1f9d348021ef3f48b37728664273ef4, type: 2}
   - {fileID: 11400000, guid: c1f9d348021ef3f48b37728664273ef4, type: 2}
-  - {fileID: 11400000, guid: 314e91faef7426a4bb4886b709de9119, type: 2}
+  - {fileID: 11400000, guid: 83c643d52ed689b46a4b9ab4770eea56, type: 2}
   role: 2
   line: BIG NUMBERS AND ONE 1
   prefab: {fileID: 4062360055529501214, guid: 1a8ea633cf273114dbf108c002bce9c7, type: 3}
